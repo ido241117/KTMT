@@ -54,8 +54,8 @@ def test_initial_board(mars_jar: Path) -> None:
 # Quan Den roi o 21; tren ban co, hang 5 co mot quan Den moi.
 def test_source_square_validation(mars_jar: Path) -> None:
     output = run_mars("1\n33\n21\n17\n", mars_jar)
-    assert output.count("Invalid source square") == 2
-    assert "Choose a destination square" in output
+    assert output.count("O xuat phat khong hop le") == 2
+    assert "Nhap o den" in output
 
 
 # Commit nay code gi: Kiem tra o den trong, dung huong va dung duong cheo;
@@ -66,7 +66,7 @@ def test_source_square_validation(mars_jar: Path) -> None:
 # hang 5 co quan Den o o dau tien; hang 6 o dau tien trong bo bon o trong.
 def test_basic_move_validation_and_application(mars_jar: Path) -> None:
     output = run_mars("21\n13\n22\n17\n", mars_jar)
-    assert output.count("Invalid move.") == 2
+    assert output.count("Nuoc di khong hop le") == 2
     assert re.search(r"(?m)^5\s+b\s+0\s+0\s+0\s*$", output)
     assert re.search(r"(?m)^6 0\s+b\s+b\s+b\s*$", output)
 
@@ -78,9 +78,9 @@ def test_basic_move_validation_and_application(mars_jar: Path) -> None:
 # nuoc Do, va thong bao ket thuc van choi.
 def test_turns_alternate(mars_jar: Path) -> None:
     output = run_mars("21\n17\n9\n13\n0\n", mars_jar)
-    assert "Red: choose a source square" in output
-    assert "Black: choose a source square" in output
-    assert "Game ended." in output
+    assert "Den luot Do." in output
+    assert "Den luot Den." in output
+    assert "Ket thuc van choi." in output
 
 
 # Commit nay code gi: Them luat nhay qua mot quan doi phuong, roi xoa quan bi
@@ -103,8 +103,8 @@ def test_turns_alternate(mars_jar: Path) -> None:
 #   5   0   0   0   0
 def test_capture_removes_opponent_piece(mars_jar: Path) -> None:
     output = run_mars("21\n17\n10\n14\n17\n10\n0\n", mars_jar)
-    assert "Captured an opponent's piece." in output
-    assert "Red: choose a source square" in output
+    assert "Da an quan doi phuong." in output
+    assert "Den luot Do." in output
     assert re.search(r"(?m)^3\s+r\s+b\s+r\s+r\s*$", output)
     assert re.search(r"(?m)^4 0\s+0\s+0\s+0\s*$", output)
     assert re.search(r"(?m)^5\s+0\s+0\s+0\s+0\s*$", output)
@@ -126,9 +126,9 @@ def test_capture_chain_and_promotion(mars_jar: Path) -> None:
         "12\n16\n25\n21\n3\n7\n17\n10\n3\n12\n0\n"
     )
     output = run_mars(input_text, mars_jar)
-    assert output.count("Captured an opponent's piece.") == 3
-    assert output.count("Capture again:") == 2
-    assert "Promoted to king." in output
+    assert output.count("Da an quan doi phuong.") == 3
+    assert output.count("Co the an tiep.") == 2
+    assert "Quan tot duoc phong vua." in output
     assert re.search(r"(?m)^3\s+r\s+0\s+r\s+B\s*$", output)
 
 
@@ -169,7 +169,7 @@ test_clear_board:
         fixture_path.write_text(fixture_source, encoding="utf-8")
         output = run_mars("18\n9\n", mars_jar, fixture_path)
 
-    assert "Black wins!" in output
+    assert "Den thang!" in output
 
 
 def main() -> int:

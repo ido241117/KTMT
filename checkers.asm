@@ -1,17 +1,17 @@
 .data
 board:   .space 64
 newline: .asciiz "\n"
-prompt_black: .asciiz "Black: choose a source square (1-32, 0 to quit): "
-prompt_red: .asciiz "Red: choose a source square (1-32, 0 to quit): "
-dest_prompt: .asciiz "Choose a destination square (1-32): "
-continue_prompt: .asciiz "Capture again: choose the next destination (1-32): "
-invalid: .asciiz "Invalid source square or not your piece. Try again.\n"
-invalid_move: .asciiz "Invalid move. Try another destination.\n"
-capture_message: .asciiz "Captured an opponent's piece.\n"
-promotion_message: .asciiz "Promoted to king.\n"
-black_wins: .asciiz "Black wins!\n"
-red_wins: .asciiz "Red wins!\n"
-quit_message: .asciiz "Game ended.\n"
+prompt_black: .asciiz "Den luot Den. Nhap o xuat phat (1-32, 0 de thoat): "
+prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, 0 de thoat): "
+dest_prompt: .asciiz "Nhap o den (1-32): "
+continue_prompt: .asciiz "Co the an tiep. Nhap o den tiep theo (1-32): "
+invalid: .asciiz "O xuat phat khong hop le hoac khong phai quan cua ban. Hay thu lai.\n"
+invalid_move: .asciiz "Nuoc di khong hop le. Hay chon o den khac.\n"
+capture_message: .asciiz "Da an quan doi phuong.\n"
+promotion_message: .asciiz "Quan tot duoc phong vua.\n"
+black_wins: .asciiz "Den thang!\n"
+red_wins: .asciiz "Do thang!\n"
+quit_message: .asciiz "Ket thuc van choi.\n"
 
 .text
 .globl main
