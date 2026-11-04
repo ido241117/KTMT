@@ -80,6 +80,33 @@ def test_turns_alternate(mars_jar: Path) -> None:
     assert "Game ended." in output
 
 
+# Commit nay code gi: Them luat nhay qua mot quan doi phuong, roi xoa quan bi
+# an khoi ban co.
+# Input: Den di 21->17; Do di 10->14; Den an 17x10; sau do nhap 0 de thoat.
+# Ban co ngay truoc nuoc an:
+#   1   r   r   r   r
+#   2 r   r   r   r
+#   3   r   0   r   r
+#   4 0   r   0   0
+#   5   b   0   0   0
+#   6 0   b   b   b
+#   7   b   b   b   b
+#   8 b   b   b   b
+# Quan Den o 17 nhay qua quan Do o 14, dap xuong o trong 10.
+# Output mong doi: Bao da an quan; quan Do o 14 va quan Den o 17 bien mat,
+# quan Den xuat hien o 10. Cac hang sau nuoc an:
+#   3   r   b   r   r
+#   4 0   0   0   0
+#   5   0   0   0   0
+def test_capture_removes_opponent_piece(mars_jar: Path) -> None:
+    output = run_mars("21\n17\n10\n14\n17\n10\n0\n", mars_jar)
+    assert "Captured an opponent's piece." in output
+    assert "Red: choose a source square" in output
+    assert re.search(r"(?m)^3\s+r\s+b\s+r\s+r\s*$", output)
+    assert re.search(r"(?m)^4 0\s+0\s+0\s+0\s*$", output)
+    assert re.search(r"(?m)^5\s+0\s+0\s+0\s+0\s*$", output)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS tests.")
     parser.add_argument("--mars-jar", required=True, type=Path)
@@ -92,6 +119,7 @@ def main() -> int:
         test_source_square_validation,
         test_basic_move_validation_and_application,
         test_turns_alternate,
+        test_capture_removes_opponent_piece,
     )
     for test in tests:
         test(args.mars_jar)

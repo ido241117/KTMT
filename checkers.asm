@@ -6,6 +6,7 @@ prompt_red: .asciiz "Red: choose a source square (1-32, 0 to quit): "
 dest_prompt: .asciiz "Choose a destination square (1-32): "
 invalid: .asciiz "Invalid source square or not your piece. Try again.\n"
 invalid_move: .asciiz "Invalid move. Try another destination.\n"
+capture_message: .asciiz "Captured an opponent's piece.\n"
 quit_message: .asciiz "Game ended.\n"
 
 .text
@@ -141,30 +142,60 @@ destination_column_ready:
     lb    $t5, 0($t4)
     bne   $t5, $zero, invalid_destination
 
+    move  $s6, $zero
     srl   $t0, $s1, 3
     srl   $t1, $s2, 3
     subu  $t2, $t1, $t0
     bgtz  $s4, validate_black_direction
-    li    $t3, 1
-    bne   $t2, $t3, invalid_destination
-    j     validate_column
+    blez  $t2, invalid_destination
+    j     measure_row_distance
 validate_black_direction:
-    li    $t3, -1
+    bgez  $t2, invalid_destination
+measure_row_distance:
+    bltz  $t2, absolute_row_distance
+    j     row_distance_ready
+absolute_row_distance:
+    subu  $t2, $zero, $t2
+row_distance_ready:
+    move  $t6, $t2
+    li    $t3, 1
+    beq   $t2, $t3, validate_column
+    li    $t3, 2
     bne   $t2, $t3, invalid_destination
+    li    $s6, 1
 validate_column:
     andi  $t0, $s1, 7
     andi  $t1, $s2, 7
     subu  $t2, $t1, $t0
+    bltz  $t2, absolute_column_distance
+    j     column_distance_ready
+absolute_column_distance:
+    subu  $t2, $zero, $t2
+column_distance_ready:
+    bne   $t2, $t6, invalid_destination
+    beq   $s6, $zero, apply_move
+    addu  $t0, $s1, $s2
+    srl   $t0, $t0, 1
+    addu  $t1, $s0, $t0
+    lb    $t2, 0($t1)
     beq   $t2, $zero, invalid_destination
-    li    $t3, 1
-    beq   $t2, $t3, apply_move
-    li    $t3, -1
-    bne   $t2, $t3, invalid_destination
+    slt   $t3, $zero, $t2
+    slt   $t4, $zero, $s4
+    beq   $t3, $t4, invalid_destination
 apply_move:
     addu  $t0, $s0, $s1
     sb    $zero, 0($t0)
     addu  $t0, $s0, $s2
     sb    $s3, 0($t0)
+    beq   $s6, $zero, finish_move
+    addu  $t0, $s1, $s2
+    srl   $t0, $t0, 1
+    addu  $t0, $s0, $t0
+    sb    $zero, 0($t0)
+    la    $a0, capture_message
+    li    $v0, 4
+    syscall
+finish_move:
     subu  $s4, $zero, $s4
     j     display_board
 
