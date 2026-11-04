@@ -1,11 +1,35 @@
 import argparse
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 
-ASSEMBLY_PATH = Path(__file__).resolve().parents[1] / "checkers.asm"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ASSEMBLY_PATH = PROJECT_ROOT / "checkers.asm"
+
+
+def load_mars_jar_from_env() -> Path:
+    env_path = PROJECT_ROOT / ".env"
+    if not env_path.is_file():
+        raise ValueError(f"Configuration file not found: {env_path}")
+
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == "MARS_JAR":
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            if not value:
+                raise ValueError("MARS_JAR is empty in .env")
+            return Path(value)
+    raise ValueError(f"MARS_JAR is not set in {env_path}")
+    raise ValueError(f"MARS_JAR is not set in {env_path}")
 
 
 def run_mars(
@@ -173,11 +197,22 @@ test_clear_board:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run checkers MARS tests.")
-    parser.add_argument("--mars-jar", required=True, type=Path)
+    parser = argparse.ArgumentParser(description="Run checkers MARS integration tests.")
+    parser.add_argument(
+        "--mars-jar",
+        type=Path,
+        help="path to MARS jar (overrides MARS_JAR in .env)",
+    )
     args = parser.parse_args()
-    if not args.mars_jar.is_file():
-        parser.error(f"MARS jar not found: {args.mars_jar}")
+
+    try:
+        mars_jar = args.mars_jar or load_mars_jar_from_env()
+    except ValueError as error:
+        parser.error(str(error))
+    if not mars_jar.is_file():
+        parser.error(f"MARS jar not found: {mars_jar}")
+    if not ASSEMBLY_PATH.is_file():
+        parser.error(f"MIPS assembly file not found: {ASSEMBLY_PATH}")
 
     tests = (
         test_initial_board,
@@ -188,9 +223,15 @@ def main() -> int:
         test_capture_chain_and_promotion,
         test_win_when_opponent_has_no_pieces,
     )
-    for test in tests:
-        test(args.mars_jar)
-        print(f"PASS: {test.__name__}")
+    try:
+        for test in tests:
+            test(mars_jar)
+            print(f"PASS: {test.__name__}")
+    except (AssertionError, OSError, RuntimeError) as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        return 1
+
+    print(f"All {len(tests)} MARS integration tests passed.")
     return 0
 
 

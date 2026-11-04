@@ -14,11 +14,17 @@ java -jar "C:\Users\ADMIN\Downloads\Mars4_5.jar" checkers.asm
 
 ## Chạy testcase
 
+Tạo file `.env` từ mẫu `.env.example` và đặt đường dẫn đến MARS trong biến `MARS_JAR`.
+
 ```powershell
-python .\tests\checkers_mars_tests.py --mars-jar "C:\Users\ADMIN\Downloads\Mars4_5.jar"
+python .\tests\checkers_mars_tests.py
 ```
 
-Mỗi commit thêm tính năng đều bổ sung testcase Python cho tính năng đó. Bộ kiểm thử chạy MARS ở chế độ dòng lệnh, kiểm tra khởi tạo bàn cờ, nhập sai, đổi lượt, ăn quân, ăn liên tiếp, phong vua, ăn lùi bằng vua và điều kiện thắng. Thay đường dẫn MARS trong lệnh trên nếu cần.
+Mỗi commit thêm tính năng đều bổ sung testcase Python cho tính năng đó. Bộ kiểm thử chạy MARS ở chế độ dòng lệnh, kiểm tra khởi tạo bàn cờ, nhập sai, đổi lượt, ăn quân, ăn liên tiếp, phong vua, ăn lùi bằng vua và điều kiện thắng. Có thể truyền đường dẫn MARS khác để ghi đè giá trị trong `.env`:
+
+```sh
+python .\tests\checkers_mars_tests.py --mars-jar "C:\path\to\Mars4_5.jar"
+```
 
 ## Cách biểu diễn bàn cờ
 
