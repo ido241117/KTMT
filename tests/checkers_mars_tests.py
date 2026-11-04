@@ -1,15 +1,18 @@
 import argparse
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 
 ASSEMBLY_PATH = Path(__file__).resolve().parents[1] / "checkers.asm"
 
 
-def run_mars(input_text: str, mars_jar: Path) -> str:
+def run_mars(
+    input_text: str, mars_jar: Path, assembly_path: Path = ASSEMBLY_PATH
+) -> str:
     result = subprocess.run(
-        ["java", "-jar", str(mars_jar), "nc", "se1", str(ASSEMBLY_PATH)],
+        ["java", "-jar", str(mars_jar), "nc", "se1", str(assembly_path)],
         input=input_text,
         capture_output=True,
         text=True,
@@ -129,6 +132,46 @@ def test_capture_chain_and_promotion(mars_jar: Path) -> None:
     assert re.search(r"(?m)^3\s+r\s+0\s+r\s+B\s*$", output)
 
 
+# Commit nay code gi: Dem so quan con lai cua doi thu sau luot; neu khong con
+# quan thi thong bao ben thang va ket thuc chuong trinh.
+# De testcase ngan gon, no tao ban co thu: xoa het quan, dat Den o 18 va Do
+# o 14. Vi tri truoc nuoc an:
+#   4 0   r   0   0
+#   5   0   b   0   0
+# Input: Den di 18->9, nhay qua quan Do o 14 va an quan cuoi cung.
+# Output mong doi: O 14 va 18 trong, quan Den o 9; chuong trinh in
+# "Black wins!" va dung, khong hoi nhap luot tiep theo.
+def test_win_when_opponent_has_no_pieces(mars_jar: Path) -> None:
+    source = ASSEMBLY_PATH.read_text(encoding="utf-8")
+    marker = "    li    $s4, 1\n    move  $s7, $zero\n"
+    setup = """\
+    li    $t0, 0
+test_clear_board:
+    addu  $t1, $s0, $t0
+    sb    $zero, 0($t1)
+    addiu $t0, $t0, 1
+    slti  $t2, $t0, 64
+    bne   $t2, $zero, test_clear_board
+    li    $t0, 35
+    addu  $t1, $s0, $t0
+    li    $t2, 1
+    sb    $t2, 0($t1)
+    li    $t0, 26
+    addu  $t1, $s0, $t0
+    li    $t2, -1
+    sb    $t2, 0($t1)
+"""
+    assert source.count(marker) == 1
+    fixture_source = source.replace(marker, setup + marker, 1)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        fixture_path = Path(temp_dir) / "checkers_win_test.asm"
+        fixture_path.write_text(fixture_source, encoding="utf-8")
+        output = run_mars("18\n9\n", mars_jar, fixture_path)
+
+    assert "Black wins!" in output
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS tests.")
     parser.add_argument("--mars-jar", required=True, type=Path)
@@ -143,6 +186,7 @@ def main() -> int:
         test_turns_alternate,
         test_capture_removes_opponent_piece,
         test_capture_chain_and_promotion,
+        test_win_when_opponent_has_no_pieces,
     )
     for test in tests:
         test(args.mars_jar)

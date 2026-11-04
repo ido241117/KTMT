@@ -9,6 +9,8 @@ invalid: .asciiz "Invalid source square or not your piece. Try again.\n"
 invalid_move: .asciiz "Invalid move. Try another destination.\n"
 capture_message: .asciiz "Captured an opponent's piece.\n"
 promotion_message: .asciiz "Promoted to king.\n"
+black_wins: .asciiz "Black wins!\n"
+red_wins: .asciiz "Red wins!\n"
 quit_message: .asciiz "Game ended.\n"
 
 .text
@@ -253,6 +255,32 @@ check_next_capture:
 finish_move:
 finish_turn:
     move  $s7, $zero
+    li    $t0, 0
+    li    $t1, 0
+count_opponent_pieces:
+    addu  $t2, $s0, $t1
+    lb    $t3, 0($t2)
+    beq   $t3, $zero, count_next_square
+    slt   $t4, $zero, $t3
+    slt   $t5, $zero, $s4
+    beq   $t4, $t5, count_next_square
+    addiu $t0, $t0, 1
+count_next_square:
+    addiu $t1, $t1, 1
+    slti  $t2, $t1, 64
+    bne   $t2, $zero, count_opponent_pieces
+    bne   $t0, $zero, switch_turn
+    bgtz  $s4, black_wins_game
+    la    $a0, red_wins
+    j     print_winner
+black_wins_game:
+    la    $a0, black_wins
+print_winner:
+    li    $v0, 4
+    syscall
+    li    $v0, 10
+    syscall
+switch_turn:
     subu  $s4, $zero, $s4
     j     display_board
 
