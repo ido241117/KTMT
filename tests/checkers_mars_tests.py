@@ -46,13 +46,26 @@ def test_initial_board(mars_jar: Path) -> None:
 
 # Commit nay code gi: Kiem tra o xuat phat co nam trong 1-32, co quan va
 # quan do thuoc nguoi dang luot (Den di dau tien) hay khong.
-# Input: 1 (quan Do), 0 (ngoai khoang 1-32), 21 (quan Den).
-# Output mong doi: Tu choi hai input dau; chap nhan o 21 va in
-# "Source square accepted.".
+# Input: 1 (quan Do), 0 (ngoai khoang 1-32), 21 (quan Den), 17 (o den).
+# Output mong doi: Tu choi 1 va 0, sau do chap nhan 21 va di 21->17.
+# Quan Den roi o 21; tren ban co, hang 5 co mot quan Den moi.
 def test_source_square_validation(mars_jar: Path) -> None:
-    output = run_mars("1\n0\n21\n", mars_jar)
+    output = run_mars("1\n0\n21\n17\n", mars_jar)
     assert output.count("Invalid source square") == 2
-    assert "Source square accepted." in output
+    assert "Choose a destination square" in output
+
+
+# Commit nay code gi: Kiem tra o den trong, dung huong va dung duong cheo;
+# chi sau khi hop le moi cap nhat vi tri quan.
+# Input: Quan Den o 21 thu di den 13 (di qua hai hang, sai), 22 (co quan),
+# roi den 17 (duong cheo mot o, hop le).
+# Output mong doi: Hai nuoc dau bi tu choi. Nuoc 21->17 duoc ap dung:
+# hang 5 co quan Den o o dau tien; hang 6 o dau tien trong bo bon o trong.
+def test_basic_move_validation_and_application(mars_jar: Path) -> None:
+    output = run_mars("21\n13\n22\n17\n", mars_jar)
+    assert output.count("Invalid move.") == 2
+    assert re.search(r"(?m)^5\s+b\s+0\s+0\s+0\s*$", output)
+    assert re.search(r"(?m)^6 0\s+b\s+b\s+b\s*$", output)
 
 
 def main() -> int:
@@ -62,7 +75,11 @@ def main() -> int:
     if not args.mars_jar.is_file():
         parser.error(f"MARS jar not found: {args.mars_jar}")
 
-    tests = (test_initial_board, test_source_square_validation)
+    tests = (
+        test_initial_board,
+        test_source_square_validation,
+        test_basic_move_validation_and_application,
+    )
     for test in tests:
         test(args.mars_jar)
         print(f"PASS: {test.__name__}")
