@@ -107,6 +107,28 @@ def test_capture_removes_opponent_piece(mars_jar: Path) -> None:
     assert re.search(r"(?m)^5\s+0\s+0\s+0\s+0\s*$", output)
 
 
+# Commit nay code gi: Phong Tot Den khi cham hang cuoi, cho vua di/an ca
+# tien va lui, va bat buoc tiep tuc neu vua con nuoc an.
+# Input (cac nuoc don de tao the an): Den 21->17, 22->18, 23->19, 24->20,
+# 25->21; Do 10->14, 11->15, 7->11, 12->16, 3->7.
+# Sau do Den nhap 17->10, chi nhap o den 3 de an tiep va phong vua, roi
+# nhap o den 12 de vua an lui. Nhap 0 sau khi chuoi an ket thuc.
+# Output mong doi: Bao 3 quan bi an, hien loi nhac an tiep 2 lan, bao phong
+# vua; vua Den cuoi cung nam o hang 3, cot cuoi.
+# Mot dong tren ban co cuoi:
+#   3   r   0   r   B
+def test_capture_chain_and_promotion(mars_jar: Path) -> None:
+    input_text = (
+        "21\n17\n10\n14\n22\n18\n11\n15\n23\n19\n7\n11\n24\n20\n"
+        "12\n16\n25\n21\n3\n7\n17\n10\n3\n12\n0\n"
+    )
+    output = run_mars(input_text, mars_jar)
+    assert output.count("Captured an opponent's piece.") == 3
+    assert output.count("Capture again:") == 2
+    assert "Promoted to king." in output
+    assert re.search(r"(?m)^3\s+r\s+0\s+r\s+B\s*$", output)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS tests.")
     parser.add_argument("--mars-jar", required=True, type=Path)
@@ -120,6 +142,7 @@ def main() -> int:
         test_basic_move_validation_and_application,
         test_turns_alternate,
         test_capture_removes_opponent_piece,
+        test_capture_chain_and_promotion,
     )
     for test in tests:
         test(args.mars_jar)

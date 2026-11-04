@@ -4,9 +4,11 @@ newline: .asciiz "\n"
 prompt_black: .asciiz "Black: choose a source square (1-32, 0 to quit): "
 prompt_red: .asciiz "Red: choose a source square (1-32, 0 to quit): "
 dest_prompt: .asciiz "Choose a destination square (1-32): "
+continue_prompt: .asciiz "Capture again: choose the next destination (1-32): "
 invalid: .asciiz "Invalid source square or not your piece. Try again.\n"
 invalid_move: .asciiz "Invalid move. Try another destination.\n"
 capture_message: .asciiz "Captured an opponent's piece.\n"
+promotion_message: .asciiz "Promoted to king.\n"
 quit_message: .asciiz "Game ended.\n"
 
 .text
@@ -40,6 +42,7 @@ initialize_store:
     bne   $t3, $zero, initialize_board
 
     li    $s4, 1
+    move  $s7, $zero
 display_board:
     li    $t0, 0
 print_row:
@@ -59,8 +62,18 @@ print_column:
     addu  $t2, $s0, $t2
     lb    $t3, 0($t2)
     beq   $t3, $zero, print_empty
+    li    $t6, 2
+    beq   $t3, $t6, print_black_king
+    li    $t6, -2
+    beq   $t3, $t6, print_red_king
     bltz  $t3, print_red
     li    $a0, 98
+    j     print_square
+print_black_king:
+    li    $a0, 66
+    j     print_square
+print_red_king:
+    li    $a0, 82
     j     print_square
 print_red:
     li    $a0, 114
@@ -119,7 +132,12 @@ source_column_ready:
     bne   $t5, $t6, invalid_source
     move  $s3, $t3
 destination_prompt:
+    bne   $s7, $zero, continue_destination_prompt
     la    $a0, dest_prompt
+    j     print_destination_prompt
+continue_destination_prompt:
+    la    $a0, continue_prompt
+print_destination_prompt:
     li    $v0, 4
     syscall
 destination_input:
@@ -146,6 +164,10 @@ destination_column_ready:
     srl   $t0, $s1, 3
     srl   $t1, $s2, 3
     subu  $t2, $t1, $t0
+    li    $t3, 2
+    beq   $s3, $t3, measure_row_distance
+    li    $t3, -2
+    beq   $s3, $t3, measure_row_distance
     bgtz  $s4, validate_black_direction
     blez  $t2, invalid_destination
     j     measure_row_distance
@@ -159,10 +181,13 @@ absolute_row_distance:
 row_distance_ready:
     move  $t6, $t2
     li    $t3, 1
-    beq   $t2, $t3, validate_column
+    beq   $t2, $t3, validate_normal_distance
     li    $t3, 2
     bne   $t2, $t3, invalid_destination
     li    $s6, 1
+    j     validate_column
+validate_normal_distance:
+    bne   $s7, $zero, invalid_destination
 validate_column:
     andi  $t0, $s1, 7
     andi  $t1, $s2, 7
@@ -187,7 +212,7 @@ apply_move:
     sb    $zero, 0($t0)
     addu  $t0, $s0, $s2
     sb    $s3, 0($t0)
-    beq   $s6, $zero, finish_move
+    beq   $s6, $zero, check_promotion
     addu  $t0, $s1, $s2
     srl   $t0, $t0, 1
     addu  $t0, $s0, $t0
@@ -195,7 +220,39 @@ apply_move:
     la    $a0, capture_message
     li    $v0, 4
     syscall
+check_promotion:
+    srl   $t0, $s2, 3
+    li    $t1, 1
+    beq   $s3, $t1, promote_black
+    li    $t1, -1
+    beq   $s3, $t1, promote_red
+    j     check_next_capture
+promote_black:
+    bne   $t0, $zero, check_next_capture
+    li    $s3, 2
+    j     store_promoted_piece
+promote_red:
+    li    $t1, 7
+    bne   $t0, $t1, check_next_capture
+    li    $s3, -2
+store_promoted_piece:
+    addu  $t0, $s0, $s2
+    sb    $s3, 0($t0)
+    la    $a0, promotion_message
+    li    $v0, 4
+    syscall
+check_next_capture:
+    beq   $s6, $zero, finish_move
+    move  $a0, $s2
+    move  $a1, $s3
+    jal   has_capture
+    beq   $v0, $zero, finish_turn
+    li    $s7, 1
+    move  $s1, $s2
+    j     destination_prompt
 finish_move:
+finish_turn:
+    move  $s7, $zero
     subu  $s4, $zero, $s4
     j     display_board
 
@@ -217,3 +274,61 @@ invalid_source:
     li    $v0, 4
     syscall
     j     source_prompt
+
+has_capture:
+    srl   $t0, $a0, 3
+    andi  $t1, $a0, 7
+    move  $t8, $zero
+    bgtz  $s4, capture_black_direction
+    li    $t2, 1
+    j     capture_direction_ready
+capture_black_direction:
+    li    $t2, -1
+capture_direction_ready:
+    li    $t3, -1
+capture_dx_loop:
+    sll   $t4, $t2, 1
+    addu  $t5, $t0, $t4
+    bltz  $t5, capture_next_dx
+    slti  $t6, $t5, 8
+    beq   $t6, $zero, capture_next_dx
+    sll   $t4, $t3, 1
+    addu  $t6, $t1, $t4
+    bltz  $t6, capture_next_dx
+    slti  $t7, $t6, 8
+    beq   $t7, $zero, capture_next_dx
+    sll   $t4, $t5, 3
+    addu  $t4, $t4, $t6
+    addu  $t4, $s0, $t4
+    lb    $t4, 0($t4)
+    bne   $t4, $zero, capture_next_dx
+    addu  $t5, $t0, $t2
+    addu  $t6, $t1, $t3
+    sll   $t5, $t5, 3
+    addu  $t5, $t5, $t6
+    addu  $t5, $s0, $t5
+    lb    $t5, 0($t5)
+    beq   $t5, $zero, capture_next_dx
+    slt   $t6, $zero, $t5
+    slt   $t7, $zero, $s4
+    bne   $t6, $t7, capture_found
+capture_next_dx:
+    addiu $t3, $t3, 2
+    slti  $t4, $t3, 2
+    bne   $t4, $zero, capture_dx_loop
+    bne   $t8, $zero, capture_not_found
+    li    $t4, 2
+    beq   $a1, $t4, capture_reverse_direction
+    li    $t4, -2
+    bne   $a1, $t4, capture_not_found
+capture_reverse_direction:
+    li    $t8, 1
+    subu  $t2, $zero, $t2
+    li    $t3, -1
+    j     capture_dx_loop
+capture_not_found:
+    move  $v0, $zero
+    jr    $ra
+capture_found:
+    li    $v0, 1
+    jr    $ra
