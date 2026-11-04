@@ -1,6 +1,9 @@
 .data
 board:   .space 64
 newline: .asciiz "\n"
+prompt:  .asciiz "Black: choose a source square (1-32): "
+invalid: .asciiz "Invalid source square or not your piece. Try again.\n"
+selected:.asciiz "Source square accepted.\n"
 
 .text
 .globl main
@@ -77,5 +80,41 @@ print_square:
     slti  $t2, $t0, 8
     bne   $t2, $zero, print_row
 
+    li    $s4, 1
+source_prompt:
+    la    $a0, prompt
+    li    $v0, 4
+    syscall
+source_input:
+    li    $v0, 5
+    syscall
+    move  $t0, $v0
+    blt   $t0, 1, invalid_source
+    bgt   $t0, 32, invalid_source
+    addiu $t0, $t0, -1
+    srl   $t1, $t0, 2
+    andi  $t2, $t0, 3
+    sll   $t2, $t2, 1
+    andi  $t3, $t1, 1
+    bne   $t3, $zero, source_column_ready
+    addiu $t2, $t2, 1
+source_column_ready:
+    sll   $s1, $t1, 3
+    addu  $s1, $s1, $t2
+    addu  $t4, $s0, $s1
+    lb    $t3, 0($t4)
+    beq   $t3, $zero, invalid_source
+    slt   $t5, $zero, $t3
+    slt   $t6, $zero, $s4
+    bne   $t5, $t6, invalid_source
+    la    $a0, selected
+    li    $v0, 4
+    syscall
     li    $v0, 10
     syscall
+
+invalid_source:
+    la    $a0, invalid
+    li    $v0, 4
+    syscall
+    j     source_prompt

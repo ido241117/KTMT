@@ -44,6 +44,17 @@ def test_initial_board(mars_jar: Path) -> None:
     assert re.search(r"(?m)^8 b\s+b\s+b\s+b\s*$", output)
 
 
+# Commit nay code gi: Kiem tra o xuat phat co nam trong 1-32, co quan va
+# quan do thuoc nguoi dang luot (Den di dau tien) hay khong.
+# Input: 1 (quan Do), 0 (ngoai khoang 1-32), 21 (quan Den).
+# Output mong doi: Tu choi hai input dau; chap nhan o 21 va in
+# "Source square accepted.".
+def test_source_square_validation(mars_jar: Path) -> None:
+    output = run_mars("1\n0\n21\n", mars_jar)
+    assert output.count("Invalid source square") == 2
+    assert "Source square accepted." in output
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS tests.")
     parser.add_argument("--mars-jar", required=True, type=Path)
@@ -51,7 +62,7 @@ def main() -> int:
     if not args.mars_jar.is_file():
         parser.error(f"MARS jar not found: {args.mars_jar}")
 
-    tests = (test_initial_board,)
+    tests = (test_initial_board, test_source_square_validation)
     for test in tests:
         test(args.mars_jar)
         print(f"PASS: {test.__name__}")
