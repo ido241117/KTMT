@@ -50,7 +50,7 @@ def test_initial_board(mars_jar: Path) -> None:
 # Output mong doi: Tu choi 1 va 0, sau do chap nhan 21 va di 21->17.
 # Quan Den roi o 21; tren ban co, hang 5 co mot quan Den moi.
 def test_source_square_validation(mars_jar: Path) -> None:
-    output = run_mars("1\n0\n21\n17\n", mars_jar)
+    output = run_mars("1\n33\n21\n17\n", mars_jar)
     assert output.count("Invalid source square") == 2
     assert "Choose a destination square" in output
 
@@ -68,6 +68,18 @@ def test_basic_move_validation_and_application(mars_jar: Path) -> None:
     assert re.search(r"(?m)^6 0\s+b\s+b\s+b\s*$", output)
 
 
+# Commit nay code gi: Hoan tat mot nuoc cua Den roi mot nuoc cua Do, sau do
+# quay lai luot Den; cho phep nhap 0 tai o xuat phat de ket thuc van.
+# Input: Den di 21->17, Do di 9->13, Den nhap 0 de thoat.
+# Output mong doi: Hien prompt luot Do sau nuoc Den, prompt luot Den sau
+# nuoc Do, va thong bao ket thuc van choi.
+def test_turns_alternate(mars_jar: Path) -> None:
+    output = run_mars("21\n17\n9\n13\n0\n", mars_jar)
+    assert "Red: choose a source square" in output
+    assert "Black: choose a source square" in output
+    assert "Game ended." in output
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS tests.")
     parser.add_argument("--mars-jar", required=True, type=Path)
@@ -79,6 +91,7 @@ def main() -> int:
         test_initial_board,
         test_source_square_validation,
         test_basic_move_validation_and_application,
+        test_turns_alternate,
     )
     for test in tests:
         test(args.mars_jar)

@@ -1,17 +1,17 @@
 .data
 board:   .space 64
 newline: .asciiz "\n"
-prompt:  .asciiz "Black: choose a source square (1-32): "
+prompt_black: .asciiz "Black: choose a source square (1-32, 0 to quit): "
+prompt_red: .asciiz "Red: choose a source square (1-32, 0 to quit): "
 dest_prompt: .asciiz "Choose a destination square (1-32): "
 invalid: .asciiz "Invalid source square or not your piece. Try again.\n"
 invalid_move: .asciiz "Invalid move. Try another destination.\n"
-move_done: .asciiz "Move accepted.\n"
+quit_message: .asciiz "Game ended.\n"
 
 .text
 .globl main
 main:
     la    $s0, board
-    move  $s5, $zero
     li    $t0, 0
 
 initialize_board:
@@ -38,6 +38,7 @@ initialize_store:
     slti  $t3, $t0, 64
     bne   $t3, $zero, initialize_board
 
+    li    $s4, 1
 display_board:
     li    $t0, 0
 print_row:
@@ -83,18 +84,20 @@ print_square:
     addiu $t0, $t0, 1
     slti  $t2, $t0, 8
     bne   $t2, $zero, print_row
-    bne   $s5, $zero, move_complete
-
-start_turn:
-    li    $s4, 1
 source_prompt:
-    la    $a0, prompt
+    bgtz  $s4, source_prompt_black
+    la    $a0, prompt_red
+    j     source_prompt_print
+source_prompt_black:
+    la    $a0, prompt_black
+source_prompt_print:
     li    $v0, 4
     syscall
 source_input:
     li    $v0, 5
     syscall
     move  $t0, $v0
+    beq   $t0, $zero, game_exit
     blt   $t0, 1, invalid_source
     bgt   $t0, 32, invalid_source
     addiu $t0, $t0, -1
@@ -141,9 +144,14 @@ destination_column_ready:
     srl   $t0, $s1, 3
     srl   $t1, $s2, 3
     subu  $t2, $t1, $t0
-    bgez  $t2, invalid_destination
+    bgtz  $s4, validate_black_direction
+    li    $t3, 1
+    bne   $t2, $t3, invalid_destination
+    j     validate_column
+validate_black_direction:
     li    $t3, -1
     bne   $t2, $t3, invalid_destination
+validate_column:
     andi  $t0, $s1, 7
     andi  $t1, $s2, 7
     subu  $t2, $t1, $t0
@@ -157,7 +165,7 @@ apply_move:
     sb    $zero, 0($t0)
     addu  $t0, $s0, $s2
     sb    $s3, 0($t0)
-    li    $s5, 1
+    subu  $s4, $zero, $s4
     j     display_board
 
 invalid_destination:
@@ -166,8 +174,8 @@ invalid_destination:
     syscall
     j     destination_prompt
 
-move_complete:
-    la    $a0, move_done
+game_exit:
+    la    $a0, quit_message
     li    $v0, 4
     syscall
     li    $v0, 10
