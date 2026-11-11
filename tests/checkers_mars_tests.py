@@ -50,25 +50,32 @@ def run_mars(
     return output
 
 
+# Bàn cờ được in dạng lưới, mỗi ô tối có ký hiệu quân và số ô, ví dụ hàng 1:
+#   |      | r  1 |      | r  2 |      | r  3 |      | r  4 |
+# Hàm này trả về các bàn cờ đã in, mỗi bàn là 8 chuỗi, mỗi chuỗi là 4 ô tối
+# của một hàng theo thứ tự số ô ('.' là ô trống), ví dụ hàng 1 là "rrrr".
+def printed_boards(output: str) -> list[list[str]]:
+    rows = [
+        "".join(re.findall(r"([.rbRB]) +\d+", line))
+        for line in output.splitlines()
+        if line.startswith("|")
+    ]
+    assert rows and len(rows) % 8 == 0, f"Board rows are incomplete:\n{output}"
+    return [rows[i:i + 8] for i in range(0, len(rows), 8)]
+
+
 # Commit này code gì: Khởi tạo bàn cờ 8x8, đặt Tốt Đỏ ở ba hàng trên và Tốt
 # Đen ở ba hàng dưới, sau đó in trạng thái bàn cờ.
 # Input: Không nhập gì; chỉ chạy chương trình.
-# Output mong đợi:
-#   1   r   r   r   r
-#   2 r   r   r   r
-#   3   r   r   r   r
-#   4 0   0   0   0
-#   5   0   0   0   0
-#   6 b   b   b   b
-#   7   b   b   b   b
-#   8 b   b   b   b
+# Output mong đợi (4 ô tối mỗi hàng, từ hàng 1 đến 8):
+#   rrrr rrrr rrrr .... .... bbbb bbbb bbbb
 # Test kiểm tra có đúng 8 hàng và quân Đen/Đỏ nằm đúng ba hàng ban đầu.
 def test_initial_board(mars_jar: Path) -> None:
     output = run_mars("", mars_jar)
-    rows = re.findall(r"(?m)^[1-8] .*$", output)
-    assert len(rows) == 8, f"Expected 8 board rows, got {len(rows)}"
-    assert re.search(r"(?m)^1\s+r\s+r\s+r\s+r\s*$", output)
-    assert re.search(r"(?m)^8 b\s+b\s+b\s+b\s*$", output)
+    boards = printed_boards(output)
+    assert len(boards) == 1, f"Expected 1 board, got {len(boards)}"
+    assert boards[0] == ["rrrr"] * 3 + ["...."] * 2 + ["bbbb"] * 3
+    assert "| r  1 |" in output and "| b 32 |" in output
 
 
 # Commit này code gì: Kiểm tra ô xuất phát nằm trong 1-32, có quân và quân
@@ -91,8 +98,9 @@ def test_source_square_validation(mars_jar: Path) -> None:
 def test_basic_move_validation_and_application(mars_jar: Path) -> None:
     output = run_mars("21\n13\n22\n17\n", mars_jar)
     assert output.count("Nuoc di khong hop le") == 2
-    assert re.search(r"(?m)^5\s+b\s+0\s+0\s+0\s*$", output)
-    assert re.search(r"(?m)^6 0\s+b\s+b\s+b\s*$", output)
+    board = printed_boards(output)[-1]
+    assert board[4] == "b..."
+    assert board[5] == ".bbb"
 
 
 # Commit này code gì: Hoàn tất một nước của Đen rồi một nước của Đỏ, sau đó
@@ -110,28 +118,18 @@ def test_turns_alternate(mars_jar: Path) -> None:
 # Commit này code gì: Thêm luật nhảy qua một quân đối phương, rồi xóa quân bị
 # ăn khỏi bàn cờ.
 # Input: Đen đi 21->17; Đỏ đi 10->14; Đen ăn 17x10; sau đó nhập 0 để thoát.
-# Bàn cờ ngay trước nước ăn:
-#   1   r   r   r   r
-#   2 r   r   r   r
-#   3   r   0   r   r
-#   4 0   r   0   0
-#   5   b   0   0   0
-#   6 0   b   b   b
-#   7   b   b   b   b
-#   8 b   b   b   b
+# Bàn cờ ngay trước nước ăn (4 ô tối mỗi hàng, từ hàng 1 đến 8):
+#   rrrr rrrr r.rr .r.. b... .bbb bbbb bbbb
 # Quân Đen ở 17 nhảy qua quân Đỏ ở 14, đáp xuống ô trống 10.
 # Output mong đợi: Báo đã ăn quân; quân Đỏ ở 14 và quân Đen ở 17 biến mất,
-# quân Đen xuất hiện ở 10. Các hàng sau nước ăn:
-#   3   r   b   r   r
-#   4 0   0   0   0
-#   5   0   0   0   0
+# quân Đen xuất hiện ở 10. Hàng 3, 4, 5 sau nước ăn:
+#   rbrr .... ....
 def test_capture_removes_opponent_piece(mars_jar: Path) -> None:
     output = run_mars("21\n17\n10\n14\n17\n10\n0\n", mars_jar)
     assert "Da an quan doi phuong." in output
     assert "Den luot Do." in output
-    assert re.search(r"(?m)^3\s+r\s+b\s+r\s+r\s*$", output)
-    assert re.search(r"(?m)^4 0\s+0\s+0\s+0\s*$", output)
-    assert re.search(r"(?m)^5\s+0\s+0\s+0\s+0\s*$", output)
+    board = printed_boards(output)[-1]
+    assert board[2:5] == ["rbrr", "....", "...."]
 
 
 # Commit này code gì: Phong Tốt Đen khi chạm hàng cuối, cho vua đi/ăn cả
@@ -142,8 +140,8 @@ def test_capture_removes_opponent_piece(mars_jar: Path) -> None:
 # nhập ô đến 12 để vua ăn lùi. Nhập 0 sau khi chuỗi ăn kết thúc.
 # Output mong đợi: Báo 3 quân bị ăn, hiện lời nhắc ăn tiếp 2 lần, báo phong
 # vua; vua Đen cuối cùng nằm ở hàng 3, cột cuối.
-# Một dòng trên bàn cờ cuối:
-#   3   r   0   r   B
+# Hàng 3 trên bàn cờ cuối (4 ô tối):
+#   r.rB
 def test_capture_chain_and_promotion(mars_jar: Path) -> None:
     input_text = (
         "21\n17\n10\n14\n22\n18\n11\n15\n23\n19\n7\n11\n24\n20\n"
@@ -153,7 +151,7 @@ def test_capture_chain_and_promotion(mars_jar: Path) -> None:
     assert output.count("Da an quan doi phuong.") == 3
     assert output.count("Co the an tiep.") == 2
     assert "Quan tot duoc phong vua." in output
-    assert re.search(r"(?m)^3\s+r\s+0\s+r\s+B\s*$", output)
+    assert printed_boards(output)[-1][2] == "r.rB"
 
 
 # Commit này code gì: Đếm số quân còn lại của đối thủ sau lượt; nếu không còn

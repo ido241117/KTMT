@@ -1,6 +1,10 @@
 .data
 board:   .space 64
 newline: .asciiz "\n"
+board_border: .asciiz "+------+------+------+------+------+------+------+------+\n"
+cell_left: .asciiz "| "
+light_cell: .asciiz "     "
+row_end: .asciiz "|\n"
 prompt_black: .asciiz "Den luot Den. Nhap o xuat phat (1-32, 0 de thoat): "
 prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, 0 de thoat): "
 dest_prompt: .asciiz "Nhap o den (1-32): "
@@ -45,17 +49,21 @@ initialize_store:
 
     li    $s4, 1
     move  $s7, $zero
+# Ban co in dang luoi; moi o toi hien ky hieu quan (r/b/R/B, '.' la o
+# trong) kem so o 1-32 de nguoi choi biet can nhap so nao.
 display_board:
+    la    $a0, newline
+    li    $v0, 4
+    syscall
+    la    $a0, board_border
+    syscall
     li    $t0, 0
 print_row:
-    addiu $a0, $t0, 1
-    li    $v0, 1
-    syscall
-    li    $a0, 32
-    li    $v0, 11
-    syscall
     li    $t1, 0
 print_column:
+    la    $a0, cell_left
+    li    $v0, 4
+    syscall
     addu  $t2, $t0, $t1
     andi  $t2, $t2, 1
     beq   $t2, $zero, print_light
@@ -81,21 +89,40 @@ print_red:
     li    $a0, 114
     j     print_square
 print_empty:
-    li    $a0, 48
-    j     print_square
-print_light:
-    li    $a0, 32
+    li    $a0, 46
 print_square:
     li    $v0, 11
     syscall
     li    $a0, 32
+    syscall
+    sll   $t2, $t0, 2
+    srl   $t3, $t1, 1
+    addu  $t2, $t2, $t3
+    addiu $t2, $t2, 1
+    slti  $t3, $t2, 10
+    beq   $t3, $zero, print_square_number
+    li    $a0, 32
+    syscall
+print_square_number:
+    move  $a0, $t2
+    li    $v0, 1
+    syscall
+    li    $a0, 32
     li    $v0, 11
     syscall
+    j     next_column
+print_light:
+    la    $a0, light_cell
+    li    $v0, 4
+    syscall
+next_column:
     addiu $t1, $t1, 1
     slti  $t2, $t1, 8
     bne   $t2, $zero, print_column
-    la    $a0, newline
+    la    $a0, row_end
     li    $v0, 4
+    syscall
+    la    $a0, board_border
     syscall
     addiu $t0, $t0, 1
     slti  $t2, $t0, 8
