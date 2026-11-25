@@ -15,6 +15,7 @@ invalid: .asciiz "O xuat phat khong hop le hoac khong phai quan cua ban. Hay thu
 invalid_move: .asciiz "Nuoc di khong hop le. Hay thu lai.\n"
 capture_message: .asciiz "Da an quan doi phuong.\n"
 promotion_message: .asciiz "Quan tot duoc phong vua.\n"
+no_move_message: .asciiz "Doi phuong khong con nuoc di hop le.\n"
 black_wins: .asciiz "Den thang!\n"
 red_wins: .asciiz "Do thang!\n"
 quit_message: .asciiz "Ket thuc van choi.\n"
@@ -124,29 +125,18 @@ check_next_capture:
     move  $s1, $s2
     j     destination_prompt
 
-# Dem quan doi phuong con lai; neu het quan thi ben vua di thang, nguoc lai
-# doi luot.
+# Doi luot roi kiem tra ben sap di con nuoc hop le khong. Het quan cung la
+# truong hop khong con nuoc di, nen mot phep kiem tra bao ca hai dieu kien.
 finish_turn:
     move  $s7, $zero
-    move  $t0, $zero
-    move  $t1, $zero
-count_opponent_pieces:
-    addu  $t2, $s0, $t1
-    lb    $t3, 0($t2)
-    beq   $t3, $zero, count_next_square
-    slt   $t4, $zero, $t3
-    slt   $t5, $zero, $s4
-    beq   $t4, $t5, count_next_square
-    addiu $t0, $t0, 1
-count_next_square:
-    addiu $t1, $t1, 1
-    slti  $t2, $t1, 64
-    bne   $t2, $zero, count_opponent_pieces
-    beq   $t0, $zero, game_won
     subu  $s4, $zero, $s4
-    j     turn_start
-game_won:
-    bgtz  $s4, black_wins_game
+    jal   has_any_move
+    bne   $v0, $zero, turn_start
+    jal   display_board
+    la    $a0, no_move_message
+    li    $v0, 4
+    syscall
+    bltz  $s4, black_wins_game
     la    $a0, red_wins
     j     print_winner
 black_wins_game:
@@ -495,4 +485,35 @@ piece_move_return:
     lw    $s1, 12($sp)
     lw    $ra, 16($sp)
     addiu $sp, $sp, 20
+    jr    $ra
+
+# ---------------------------------------------------------------------------
+# has_any_move: ben $s4 con it nhat mot nuoc di thuong hoac nuoc an hop le?
+# Tra ve: $v0 = 1 neu con, 0 neu het quan hoac moi quan deu bi chan.
+# ---------------------------------------------------------------------------
+has_any_move:
+    addiu $sp, $sp, -8
+    sw    $ra, 4($sp)
+    sw    $s1, 0($sp)
+    move  $s1, $zero
+any_move_loop:
+    addu  $t0, $s0, $s1
+    lb    $a1, 0($t0)
+    beq   $a1, $zero, any_move_next
+    slt   $t1, $zero, $a1
+    slt   $t2, $zero, $s4
+    bne   $t1, $t2, any_move_next
+    move  $a0, $s1
+    move  $a2, $zero
+    jal   piece_has_move
+    bne   $v0, $zero, any_move_return
+any_move_next:
+    addiu $s1, $s1, 1
+    slti  $t0, $s1, 64
+    bne   $t0, $zero, any_move_loop
+    move  $v0, $zero
+any_move_return:
+    lw    $s1, 0($sp)
+    lw    $ra, 4($sp)
+    addiu $sp, $sp, 8
     jr    $ra

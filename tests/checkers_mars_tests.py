@@ -212,6 +212,21 @@ def test_win_when_opponent_has_no_pieces(mars_jar: Path) -> None:
     assert "Nhap o xuat phat" not in output.split("Da an quan doi phuong.")[-1]
 
 
+# Commit này code gì: Phát hiện thắng khi đối phương còn quân nhưng mọi quân
+# đều bị chặn, không còn nước đi thường hay nước ăn nào.
+# Bàn cờ thử: Tốt Đỏ ở 25, Tốt Đen ở 29, Vua Đen ở 26. Vị trí:
+#   7   r   B   0   0
+#   8 b   0   0   0
+# Input: Vua Đen đi 26->30. Tốt Đỏ ở 25 chỉ đi xuống được ô 29 và 30, cả
+# hai đã có quân; không ăn được vì phía sau là mép bàn cờ.
+# Output mong đợi: Báo đối phương hết nước đi và in "Đen thắng!".
+def test_win_when_opponent_is_blocked(mars_jar: Path) -> None:
+    output = run_mars_with_board({49: -1, 56: 1, 51: 2}, "26\n30\n", mars_jar)
+    assert "Doi phuong khong con nuoc di hop le." in output
+    assert "Den thang!" in output
+    assert printed_boards(output)[-1][5:] == ["....", "r...", "bB.."]
+
+
 # Commit này code gì: Đọc input bằng syscall 8 và tự chuyển sang số, để chữ
 # cái hoặc dòng trống không làm MARS dừng chương trình.
 # Input: "abc" và dòng trống ở ô xuất phát, " 21 " (có khoảng trắng), "x" ở
@@ -254,6 +269,7 @@ def main() -> int:
         test_capture_removes_opponent_piece,
         test_capture_chain_and_promotion,
         test_win_when_opponent_has_no_pieces,
+        test_win_when_opponent_is_blocked,
         test_non_numeric_input_is_rejected,
     )
     try:

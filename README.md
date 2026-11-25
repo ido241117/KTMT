@@ -52,15 +52,16 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 | `square_to_index` | Đổi số ô 1–32 sang chỉ số 0–63 trong `board`. |
 | `validate_move` | Kiểm tra ô đến trống, đúng hướng, đúng đường chéo; trả về 0 (sai), 1 (đi thường) hoặc 2 (ăn quân). |
 | `piece_has_move` | Thử 8 ô đích quanh một quân bằng `validate_move`; dùng để tìm nước ăn tiếp. |
+| `has_any_move` | Kiểm tra bên đang đến lượt còn nước đi hợp lệ hay không. |
 
 1. `source_prompt` và `destination_prompt` nhận lượt đi qua `read_number` và `square_to_index`, sau đó gọi `validate_move`.
 2. `apply_move` cập nhật quân; nếu ăn thì xóa quân đối phương ở ô giữa. Nếu tốt đến hàng cuối, chương trình phong vua.
 3. Sau nước ăn, `piece_has_move` tìm nước ăn tiếp cho cùng quân; nếu có thì bắt buộc ăn tiếp.
-4. `finish_turn` đếm quân đối phương; nếu đối phương hết quân thì bên vừa đi thắng, nếu chưa thì đổi lượt.
+4. `finish_turn` đổi lượt rồi gọi `has_any_move`. Nếu bên sắp đi hết quân hoặc mọi quân đều bị chặn, bên vừa đi thắng.
 
 ## Phạm vi
 
 - Ăn quân ở đầu lượt chưa bắt buộc; nếu đã ăn mà còn nước ăn tiếp thì phải tiếp tục.
 - Vua di chuyển và ăn chéo theo cả hai hướng.
-- Chương trình phát hiện thắng khi đối phương hết quân; chưa phát hiện trường hợp đối phương còn quân nhưng không còn nước đi hợp lệ.
+- Chương trình phát hiện thắng khi đối phương hết quân hoặc còn quân nhưng không còn nước đi hợp lệ.
 - Ô xuất phát nhận `0` để thoát; các ô đi hợp lệ nằm trong khoảng 1–32. Nhập chữ, dòng trống hoặc ký tự lạ sẽ được báo lỗi và yêu cầu nhập lại thay vì làm MARS dừng chương trình.
