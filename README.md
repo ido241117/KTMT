@@ -65,3 +65,10 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 - Vua di chuyển và ăn chéo theo cả hai hướng.
 - Chương trình phát hiện thắng khi đối phương hết quân hoặc còn quân nhưng không còn nước đi hợp lệ.
 - Ô xuất phát nhận `0` để thoát; các ô đi hợp lệ nằm trong khoảng 1–32. Nhập chữ, dòng trống hoặc ký tự lạ sẽ được báo lỗi và yêu cầu nhập lại thay vì làm MARS dừng chương trình.
+
+## Tính năng mở rộng
+
+### Xoay bàn cờ theo người đang đi
+
+- **Lý do:** Bên Đỏ ngồi đối diện bên Đen; nếu bàn cờ luôn in với Đen ở dưới thì đến lượt Đỏ, người chơi phải tự hình dung ngược hướng đi. Xoay bàn cờ giúp cả hai bên luôn thấy quân mình ở dưới và đi lên.
+- **Cách làm:** `display_board` in dòng tiêu đề cho biết góc nhìn, rồi duyệt các ô hiển thị như cũ. Khi `$s4 < 0` (lượt Đỏ), ô hiển thị thứ `i` lấy dữ liệu từ ô `63 - i` của `board`, tức xoay 180 độ. Mảng `board` không đổi nên phần kiểm tra nước đi giữ nguyên.

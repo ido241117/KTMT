@@ -76,18 +76,33 @@ test_clear_board:
         return run_mars(input_text, mars_jar, fixture_path)
 
 
+RED_HEADER = "Ban co theo goc nhin ben Do:"
+BLACK_HEADER = "Ban co theo goc nhin ben Den:"
+
+
 # Bàn cờ được in dạng lưới, mỗi ô tối có ký hiệu quân và số ô, ví dụ hàng 1:
 #   |      | r  1 |      | r  2 |      | r  3 |      | r  4 |
 # Hàm này trả về các bàn cờ đã in, mỗi bàn là 8 chuỗi, mỗi chuỗi là 4 ô tối
-# của một hàng theo thứ tự số ô ('.' là ô trống), ví dụ hàng 1 là "rrrr".
-def printed_boards(output: str) -> list[list[str]]:
-    rows = [
-        "".join(re.findall(r"([.rbRB]) +\d+", line))
-        for line in output.splitlines()
-        if line.startswith("|")
-    ]
-    assert rows and len(rows) % 8 == 0, f"Board rows are incomplete:\n{output}"
-    return [rows[i:i + 8] for i in range(0, len(rows), 8)]
+# của một hàng theo thứ tự in ('.' là ô trống), ví dụ hàng 1 là "rrrr".
+# Bàn cờ in trong lượt Đỏ bị xoay 180 độ; mặc định hàm xoay ngược lại để mọi
+# bàn cờ đều theo hướng chuẩn (Đỏ ở trên). Truyền raw=True để giữ nguyên.
+def printed_boards(output: str, raw: bool = False) -> list[list[str]]:
+    boards: list[list[str]] = []
+    rows: list[str] = []
+    rotated = False
+    for line in output.splitlines():
+        if line.startswith((RED_HEADER, BLACK_HEADER)):
+            assert not rows, f"Board rows are incomplete:\n{output}"
+            rotated = line.startswith(RED_HEADER)
+        elif line.startswith("|"):
+            rows.append("".join(re.findall(r"([.rbRB]) +\d+", line)))
+            if len(rows) == 8:
+                if rotated and not raw:
+                    rows = [row[::-1] for row in reversed(rows)]
+                boards.append(rows)
+                rows = []
+    assert boards and not rows, f"Board rows are incomplete:\n{output}"
+    return boards
 
 
 # Commit này code gì: Khởi tạo bàn cờ 8x8, đặt Tốt Đỏ ở ba hàng trên và Tốt
@@ -102,6 +117,22 @@ def test_initial_board(mars_jar: Path) -> None:
     assert len(boards) == 1, f"Expected 1 board, got {len(boards)}"
     assert boards[0] == ["rrrr"] * 3 + ["...."] * 2 + ["bbbb"] * 3
     assert "| r  1 |" in output and "| b 32 |" in output
+
+
+# Commit này code gì: In bàn cờ theo góc nhìn người đang đi; lượt Đỏ thì xoay
+# bàn cờ 180 độ để quân Đỏ cũng đi từ dưới lên.
+# Input: Đen đi 21->17, sau đó dừng ở lượt Đỏ.
+# Output mong đợi: Bàn cờ lượt Đỏ có tiêu đề góc nhìn Đỏ, hàng trên cùng là
+# hàng quân Đen (hàng 8), hàng dưới cùng là quân Đỏ; hàng 5 của Đen (b...) in
+# ngược thành ...b ở hàng thứ 4 tính từ trên xuống.
+def test_board_rotates_for_red(mars_jar: Path) -> None:
+    output = run_mars("21\n17\n", mars_jar)
+    assert BLACK_HEADER in output and RED_HEADER in output
+    assert printed_boards(output, raw=True)[-1] == [
+        "bbbb", "bbbb", "bbb.", "...b", "....", "rrrr", "rrrr", "rrrr"
+    ]
+    red_part = output.split(RED_HEADER)[-1]
+    assert re.search(r"b 32 .*b 31 .*b 30 .*b 29 ", red_part.splitlines()[2])
 
 
 # Commit này code gì: Kiểm tra ô xuất phát nằm trong 1-32, có quân và quân
@@ -262,6 +293,7 @@ def main() -> int:
 
     tests = (
         test_initial_board,
+        test_board_rotates_for_red,
         test_source_square_validation,
         test_basic_move_validation_and_application,
         test_blocked_piece_does_not_soft_lock,

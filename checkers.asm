@@ -2,6 +2,8 @@
 board:   .space 64
 input_buffer: .space 16
 newline: .asciiz "\n"
+header_black: .asciiz "Ban co theo goc nhin ben Den:\n"
+header_red: .asciiz "Ban co theo goc nhin ben Do:\n"
 board_border: .asciiz "+------+------+------+------+------+------+------+------+\n"
 cell_left: .asciiz "| "
 light_cell: .asciiz "     "
@@ -211,10 +213,19 @@ initialize_store:
 # ---------------------------------------------------------------------------
 # display_board: in ban co dang luoi; moi o toi hien ky hieu quan (r/b/R/B,
 # '.' la o trong) kem so o 1-32 de nguoi choi biet can nhap so nao.
+# Ban co duoc in theo goc nhin cua ben dang di ($s4): luot Do thi xoay 180
+# do (o hien thi thu i la o 63 - i trong board) de quan Do cung di len.
 # ---------------------------------------------------------------------------
 display_board:
     la    $a0, newline
     li    $v0, 4
+    syscall
+    bgtz  $s4, display_header_black
+    la    $a0, header_red
+    j     display_header_print
+display_header_black:
+    la    $a0, header_black
+display_header_print:
     syscall
     la    $a0, board_border
     syscall
@@ -228,9 +239,13 @@ print_column:
     addu  $t2, $t0, $t1
     andi  $t2, $t2, 1
     beq   $t2, $zero, print_light
-    sll   $t2, $t0, 3
-    addu  $t2, $t2, $t1
-    addu  $t2, $s0, $t2
+    sll   $t7, $t0, 3
+    addu  $t7, $t7, $t1
+    bgtz  $s4, print_cell_index_ready
+    li    $t2, 63
+    subu  $t7, $t2, $t7
+print_cell_index_ready:
+    addu  $t2, $s0, $t7
     lb    $t3, 0($t2)
     beq   $t3, $zero, print_empty
     li    $t6, 2
@@ -256,8 +271,10 @@ print_square:
     syscall
     li    $a0, 32
     syscall
-    sll   $t2, $t0, 2
-    srl   $t3, $t1, 1
+    srl   $t2, $t7, 3
+    sll   $t2, $t2, 2
+    andi  $t3, $t7, 7
+    srl   $t3, $t3, 1
     addu  $t2, $t2, $t3
     addiu $t2, $t2, 1
     slti  $t3, $t2, 10
