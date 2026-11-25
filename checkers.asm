@@ -18,10 +18,16 @@ move_item_separator: .asciiz ") "
 choice_prompt: .asciiz "Chon nuoc di (1-"
 choice_prompt_end: .asciiz "): "
 continue_message: .asciiz "Co the an tiep.\n"
-invalid_input: .asciiz "Dau vao khong phai so nguyen. Hay nhap lai.\n"
-invalid: .asciiz "O xuat phat khong hop le hoac khong phai quan cua ban. Hay thu lai.\n"
-no_moves_for_piece: .asciiz "Quan nay khong co nuoc di hop le. Hay chon quan khac.\n"
-invalid_choice: .asciiz "Lua chon khong hop le. Hay thu lai.\n"
+error_square_not_number: .asciiz "Loi: dau vao khong phai so nguyen. Hay nhap so o tu 1 den 32 (0 de thoat).\n"
+error_square_prefix: .asciiz "Loi: o "
+error_out_of_range_suffix: .asciiz " nam ngoai khoang 1-32.\n"
+error_empty_suffix: .asciiz " dang trong, khong co quan de di.\n"
+error_opponent_suffix: .asciiz " la quan cua doi phuong. Hay chon quan cua ban.\n"
+error_blocked_suffix: .asciiz " bi chan, khong co nuoc di hop le. Hay chon quan khac.\n"
+error_choice_not_number: .asciiz "Loi: dau vao khong phai so nguyen. Hay nhap so thu tu tu 1 den "
+error_choice_prefix: .asciiz "Loi: lua chon "
+error_choice_suffix: .asciiz " khong co trong danh sach.\n"
+period_newline: .asciiz ".\n"
 capture_message: .asciiz "Da an quan doi phuong.\n"
 promotion_message: .asciiz "Quan tot duoc phong vua.\n"
 no_move_message: .asciiz "Doi phuong khong con nuoc di hop le.\n"
@@ -32,7 +38,8 @@ quit_message: .asciiz "Ket thuc van choi.\n"
 # Quy uoc thanh ghi dung xuyen suot chuong trinh chinh:
 #   $s0 = dia chi board        $s4 = luot hien tai (1 Den, -1 Do)
 #   $s1 = o xuat phat (0-63)   $s6 = 1 neu nuoc vua di la nuoc an
-#   $s2 = o den (0-63)         $s7 = 1 khi dang trong chuoi an bat buoc
+#   $s2 = o den (0-63); luc chon quan, tam giu so o vua nhap de in loi
+#                              $s7 = 1 khi dang trong chuoi an bat buoc
 #   $s3 = gia tri quan dang di (1/-1 tot, 2/-2 vua)
 #   $s5 = so nuoc di trong move_list cua quan dang chon
 .text
@@ -57,16 +64,17 @@ source_prompt_print:
     jal   read_number
     bltz  $v0, invalid_source_input
     beq   $v0, $zero, game_exit
+    move  $s2, $v0
     move  $a0, $v0
     jal   square_to_index
-    bltz  $v0, invalid_source
+    bltz  $v0, source_out_of_range
     move  $s1, $v0
     addu  $t0, $s0, $s1
     lb    $s3, 0($t0)
-    beq   $s3, $zero, invalid_source
+    beq   $s3, $zero, source_empty
     slt   $t0, $zero, $s3
     slt   $t1, $zero, $s4
-    bne   $t0, $t1, invalid_source
+    bne   $t0, $t1, source_opponent
 
 # Liet ke moi nuoc di hop le cua quan o $s1 roi cho nguoi choi chon theo so
 # thu tu. Trong chuoi an ($s7 != 0) danh sach chi gom nuoc an tiep.
@@ -94,8 +102,9 @@ print_move_menu:
     li    $v0, 4
     syscall
     jal   read_number
-    blt   $v0, 1, invalid_choice_entry
-    bgt   $v0, $s5, invalid_choice_entry
+    bltz  $v0, choice_not_number
+    blt   $v0, 1, choice_out_of_range
+    bgt   $v0, $s5, choice_out_of_range
     la    $t0, move_list
     addu  $t0, $t0, $v0
     lbu   $s2, -1($t0)
@@ -173,26 +182,44 @@ print_winner:
     li    $v0, 10
     syscall
 
+# Moi loi o xuat phat neu ro nguyen nhan; cac loi lien quan den mot o in kem
+# so o nguoi choi vua nhap ($s2), vi du "Loi: o 15 dang trong, ...".
 invalid_source_input:
-    la    $a0, invalid_input
-    j     report_source_error
-piece_has_no_moves:
-    la    $a0, no_moves_for_piece
-    j     report_source_error
-invalid_source:
-    la    $a0, invalid
-report_source_error:
+    la    $a0, error_square_not_number
     li    $v0, 4
     syscall
+    j     source_prompt
+source_out_of_range:
+    la    $a2, error_out_of_range_suffix
+    j     report_square_error
+source_empty:
+    la    $a2, error_empty_suffix
+    j     report_square_error
+source_opponent:
+    la    $a2, error_opponent_suffix
+    j     report_square_error
+piece_has_no_moves:
+    la    $a2, error_blocked_suffix
+report_square_error:
+    la    $a0, error_square_prefix
+    move  $a1, $s2
+    jal   print_with_number
     j     source_prompt
 
 # Lua chon sai ngoai chuoi an ($s7 == 0): chon lai tu o xuat phat (khop
 # req.md). Trong chuoi an bat buoc ($s7 != 0) quan an phai giu nguyen, chi
 # in lai danh sach nuoc an.
-invalid_choice_entry:
-    la    $a0, invalid_choice
-    li    $v0, 4
-    syscall
+choice_not_number:
+    la    $a0, error_choice_not_number
+    move  $a1, $s5
+    la    $a2, period_newline
+    j     report_choice_error
+choice_out_of_range:
+    la    $a0, error_choice_prefix
+    move  $a1, $v0
+    la    $a2, error_choice_suffix
+report_choice_error:
+    jal   print_with_number
     beq   $s7, $zero, source_prompt
     j     move_menu
 
@@ -470,6 +497,21 @@ validate_step:
     jr    $ra
 validate_invalid:
     move  $v0, $zero
+    jr    $ra
+
+# ---------------------------------------------------------------------------
+# print_with_number: in chuoi $a0, so nguyen $a1, roi chuoi $a2. Dung de ghep
+# thong bao loi co kem con so nguoi choi vua nhap.
+# ---------------------------------------------------------------------------
+print_with_number:
+    li    $v0, 4
+    syscall
+    move  $a0, $a1
+    li    $v0, 1
+    syscall
+    move  $a0, $a2
+    li    $v0, 4
+    syscall
     jr    $ra
 
 # ---------------------------------------------------------------------------

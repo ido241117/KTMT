@@ -170,8 +170,35 @@ def test_notation_follows_current_player(mars_jar: Path) -> None:
 # Output mong đợi: Từ chối 1 và 33, sau đó chấp nhận 21 và hiện danh sách.
 def test_source_square_validation(mars_jar: Path) -> None:
     output = run_mars("1\n33\n" + turn(21, 1), mars_jar)
-    assert output.count("O xuat phat khong hop le") == 2
+    assert output.count("Loi: o ") == 2
     assert "Chon nuoc di (1-1)" in output
+
+
+# Commit này code gì: Thông báo lỗi nêu rõ nguyên nhân và con số đã nhập.
+# Input lượt Đen: "abc", 33 (ngoài khoảng), 15 (ô trống), 9 (quân Đỏ), 29
+# (quân bị chặn), quân 21 với lựa chọn 7 (ngoài danh sách), quân 21 với "?"
+# (không phải số); cuối cùng đi 21->17. Lượt Đỏ nhập 9 (theo số ô của Đỏ,
+# là ô chuẩn 24 có quân Đen) rồi 0 để thoát.
+# Output mong đợi: Mỗi lỗi có một thông báo riêng; lỗi của Đỏ in đúng số ô
+# Đỏ đã nhập.
+def test_error_messages_explain_reason(mars_jar: Path) -> None:
+    output = run_mars(
+        "abc\n33\n15\n9\n29\n21\n7\n21\n?\n" + turn(21, 1) + "9\n0\n", mars_jar
+    )
+    expected = [
+        "Loi: dau vao khong phai so nguyen. Hay nhap so o tu 1 den 32 (0 de thoat).",
+        "Loi: o 33 nam ngoai khoang 1-32.",
+        "Loi: o 15 dang trong, khong co quan de di.",
+        "Loi: o 9 la quan cua doi phuong. Hay chon quan cua ban.",
+        "Loi: o 29 bi chan, khong co nuoc di hop le. Hay chon quan khac.",
+        "Loi: lua chon 7 khong co trong danh sach.",
+        "Loi: dau vao khong phai so nguyen. Hay nhap so thu tu tu 1 den 1.",
+    ]
+    position = 0
+    for message in expected:
+        position = output.index(message, position) + len(message)
+    red_part = output.split(RED_HEADER)[-1]
+    assert "Loi: o 9 la quan cua doi phuong." in red_part
 
 
 # Commit này code gì: Chọn quân rồi chọn nước đi từ danh sách các nước hợp lệ
@@ -195,7 +222,8 @@ def test_move_menu_lists_legal_moves(mars_jar: Path) -> None:
 # (lời nhắc lượt Đen hiện 3 lần). Nước 21->17 được áp dụng.
 def test_basic_move_validation_and_application(mars_jar: Path) -> None:
     output = run_mars("21\n5\n21\nx\n" + turn(21, 1), mars_jar)
-    assert output.count("Lua chon khong hop le") == 2
+    assert "Loi: lua chon 5 khong co trong danh sach." in output
+    assert "Hay nhap so thu tu tu 1 den 1." in output
     assert output.count("Den luot Den.") == 3
     board = printed_boards(output)[-1]
     assert board[4] == "b..."
@@ -208,7 +236,7 @@ def test_basic_move_validation_and_application(mars_jar: Path) -> None:
 # 21->17 được áp dụng và quân ở 29 vẫn nằm yên.
 def test_blocked_piece_does_not_soft_lock(mars_jar: Path) -> None:
     output = run_mars("29\n" + turn(21, 1) + "0\n", mars_jar)
-    assert output.count("Quan nay khong co nuoc di hop le") == 1
+    assert output.count("Loi: o 29 bi chan") == 1
     assert output.count("Den luot Den.") == 2
     board = printed_boards(output)[-1]
     assert board[4] == "b..."
@@ -315,8 +343,8 @@ def test_win_when_opponent_is_blocked(mars_jar: Path) -> None:
 # nước 21->17 được áp dụng.
 def test_non_numeric_input_is_rejected(mars_jar: Path) -> None:
     output = run_mars("abc\n\n 21 \nx\n" + turn(21, 1) + "0\n", mars_jar)
-    assert output.count("Dau vao khong phai so nguyen") == 2
-    assert output.count("Lua chon khong hop le") == 1
+    assert output.count("Hay nhap so o tu 1 den 32") == 2
+    assert output.count("Hay nhap so thu tu tu 1 den 1.") == 1
     assert output.count("Den luot Den.") == 4
     assert "Ket thuc van choi." in output
     board = printed_boards(output)[-1]
@@ -347,6 +375,7 @@ def main() -> int:
         test_board_rotates_for_red,
         test_notation_follows_current_player,
         test_source_square_validation,
+        test_error_messages_explain_reason,
         test_move_menu_lists_legal_moves,
         test_basic_move_validation_and_application,
         test_blocked_piece_does_not_soft_lock,

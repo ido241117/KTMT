@@ -54,6 +54,7 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 | `validate_move` | Kiểm tra ô đến trống, đúng hướng, đúng đường chéo; trả về 0 (sai), 1 (đi thường) hoặc 2 (ăn quân). |
 | `build_move_list` | Thử mọi ô đích 1–32 bằng `validate_move`, ghi các nước hợp lệ của một quân vào `move_list`. |
 | `print_move_list` | In danh sách nước đi đã đánh số để người chơi chọn. |
+| `print_with_number` | In "chuỗi + số + chuỗi", dùng cho thông báo lỗi có kèm số đã nhập. |
 | `has_any_move` | Kiểm tra bên đang đến lượt còn nước đi hợp lệ hay không. |
 
 1. `source_prompt` nhận ô xuất phát; `move_menu` gọi `build_move_list` và `print_move_list`, rồi đọc số thứ tự nước đi.
@@ -84,3 +85,20 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 
 - **Lý do:** Gõ ô đến dễ sai (nhầm hướng, nhầm ô có quân, quên luật ăn). Khi chương trình tự liệt kê các nước hợp lệ, người chơi chỉ cần chọn, không thể nhập một nước sai luật. Chọn nhầm một quân bị chặn cũng được báo ngay thay vì phải đoán ô đến. Trong chuỗi ăn, danh sách chỉ gồm các nước ăn tiếp nên người chơi thấy rõ mình bắt buộc phải đi đâu.
 - **Cách làm:** `build_move_list` thử lần lượt ô đích 1–32 (theo góc nhìn bên đang đi) bằng `validate_move` và lưu các ô hợp lệ vào mảng `move_list`. Vì thử theo số ô tăng dần nên danh sách đã được sắp xếp sẵn. `print_move_list` in từng nước theo ký hiệu cờ đam (`-` đi thường, `x` ăn quân). Lựa chọn `k` lấy ô đích từ `move_list[k - 1]`; nước ăn được nhận ra khi hàng đích cách hàng xuất phát 2 hàng. Cùng hàm này cũng dùng để kiểm tra còn nước ăn tiếp (`$s7 = 1` khiến `validate_move` chỉ nhận nước ăn) và kiểm tra bên sắp đi còn nước hay không.
+
+### Thông báo lỗi rõ ràng
+
+- **Lý do:** Thông báo chung chung kiểu "không hợp lệ" buộc người chơi tự đoán mình sai ở đâu. Thông báo nêu đúng nguyên nhân và lặp lại con số vừa nhập giúp sửa ngay ở lần nhập tiếp theo.
+- **Các lỗi được phân biệt:**
+
+  | Tình huống | Thông báo |
+  |---|---|
+  | Ô xuất phát không phải số | `Loi: dau vao khong phai so nguyen. Hay nhap so o tu 1 den 32 (0 de thoat).` |
+  | Ô ngoài khoảng | `Loi: o 33 nam ngoai khoang 1-32.` |
+  | Ô trống | `Loi: o 15 dang trong, khong co quan de di.` |
+  | Quân đối phương | `Loi: o 9 la quan cua doi phuong. Hay chon quan cua ban.` |
+  | Quân bị chặn | `Loi: o 29 bi chan, khong co nuoc di hop le. Hay chon quan khac.` |
+  | Lựa chọn không phải số | `Loi: dau vao khong phai so nguyen. Hay nhap so thu tu tu 1 den N.` |
+  | Lựa chọn ngoài danh sách | `Loi: lua chon 7 khong co trong danh sach.` |
+
+- **Cách làm:** Mỗi lần kiểm tra thất bại nhảy đến một nhãn riêng (`source_out_of_range`, `source_empty`, `source_opponent`, `piece_has_no_moves`, `choice_out_of_range`, ...). Các nhãn này chỉ chọn phần đuôi thông báo rồi dùng chung hàm `print_with_number` để in "phần đầu + số đã nhập + phần đuôi". Số ô vừa nhập được giữ trong `$s2` trong lúc chọn quân. Số in ra đúng là số người chơi đã gõ, nên với Đỏ vẫn là số theo góc nhìn Đỏ.
