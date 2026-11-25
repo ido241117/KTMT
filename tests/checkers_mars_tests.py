@@ -408,6 +408,47 @@ def test_play_again_after_game_ends(mars_jar: Path) -> None:
     assert "Ket thuc van choi." in output.split("Nhap M de choi van moi")[-1]
 
 
+# Commit này code gì: Dưới bàn cờ in số quân mỗi bên và nước vừa đi của đối
+# phương, theo số ô của người đang xem bàn cờ.
+# Input: Đen đi 21->17, Đỏ đi 10->14, Đen ăn 17x10, Đỏ nhập 0.
+# Output mong đợi:
+#   - Đầu ván: "So quan: Den 12, Do 12", chưa có nước vừa đi.
+#   - Đỏ thấy nước Đen 21-17 theo số ô của Đỏ: 12-16.
+#   - Đen thấy nước Đỏ 10-14 theo số ô chuẩn: 10-14.
+#   - Đỏ thấy nước ăn của Đen 17x10 theo số ô của Đỏ: 16x23, Đỏ còn 11 quân.
+def test_status_shows_last_move_and_counts(mars_jar: Path) -> None:
+    output = run_mars(turn(21, 1) + turn(red(10), 2) + turn(17, 1) + "0\n", mars_jar)
+    first_turn = output.split("Den luot Den.")[0]
+    assert "So quan: Den 12, Do 12" in first_turn
+    assert "Nuoc vua di" not in first_turn
+    statuses = re.findall(r"Nuoc vua di cua (?:Den|Do): [\dx-]+", output)
+    assert statuses == [
+        "Nuoc vua di cua Den: 12-16",
+        "Nuoc vua di cua Do: 10-14",
+        "Nuoc vua di cua Den: 16x23",
+    ]
+    assert output.split(RED_HEADER)[-1].count("So quan: Den 12, Do 11") == 1
+
+
+# Commit này code gì: Nước vừa đi ghi lại cả chuỗi ăn liên tiếp.
+# Input: Thế cờ của test ăn liên tiếp; Đen ăn 17x10x3x12.
+# Output mong đợi: Đỏ thấy "Nuoc vua di cua Den: 16x23x30x21" (số ô của Đỏ)
+# và Đỏ còn 9 quân.
+def test_status_records_capture_chain(mars_jar: Path) -> None:
+    input_text = (
+        turn(21, 1) + turn(red(10), 2)
+        + turn(22, 1) + turn(red(11), 2)
+        + turn(23, 1) + turn(red(7), 1)
+        + turn(24, 1) + turn(red(12), 1)
+        + turn(25, 1) + turn(red(3), 1)
+        + turn(17, 1) + "1\n1\n0\n"
+    )
+    output = run_mars(input_text, mars_jar)
+    last_status = output.split(RED_HEADER)[-1]
+    assert "Nuoc vua di cua Den: 16x23x30x21" in last_status
+    assert "So quan: Den 12, Do 9" in last_status
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS integration tests.")
     parser.add_argument(
@@ -445,6 +486,8 @@ def main() -> int:
         test_draw_offer_can_be_declined,
         test_restart_during_game,
         test_play_again_after_game_ends,
+        test_status_shows_last_move_and_counts,
+        test_status_records_capture_chain,
     )
     try:
         for test in tests:

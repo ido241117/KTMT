@@ -54,6 +54,8 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 | `validate_move` | Kiểm tra ô đến trống, đúng hướng, đúng đường chéo; trả về 0 (sai), 1 (đi thường) hoặc 2 (ăn quân). |
 | `build_move_list` | Thử mọi ô đích 1–32 bằng `validate_move`, ghi các nước hợp lệ của một quân vào `move_list`. |
 | `print_move_list` | In danh sách nước đi đã đánh số để người chơi chọn. |
+| `record_move` | Ghi bước đi vừa áp dụng vào `last_path` (nối thêm khi ăn liên tiếp). |
+| `print_game_status` | In số quân mỗi bên và nước vừa đi dưới bàn cờ. |
 | `print_with_number` | In "chuỗi + số + chuỗi", dùng cho thông báo lỗi có kèm số đã nhập. |
 | `has_any_move` | Kiểm tra bên đang đến lượt còn nước đi hợp lệ hay không. |
 
@@ -114,3 +116,15 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 - **Lý do:** Trên MARS, chạy lại chương trình nghĩa là phải dừng, nạp lại (assemble) rồi chạy lại. Khi muốn chơi nhiều ván liên tiếp hoặc bắt đầu lại một ván đi hỏng, chơi lại ngay trong chương trình nhanh hơn nhiều.
 - **Cách dùng:** Nhập `M` tại lời nhắc ô xuất phát để bỏ ván hiện tại và bắt đầu ván mới. Khi ván kết thúc (thắng hoặc hòa), chương trình hỏi `Nhap M de choi van moi`; nhập phím khác để thoát.
 - **Cách làm:** Phần khởi tạo trong `main` được đặt nhãn `new_game` (gọi `initialize_board`, đặt `$s4 = 1`, `$s7 = 0`). `restart_game` in thông báo rồi nhảy về `new_game`. Mọi đường kết thúc ván (thắng hoặc hòa) đều đi qua `game_over`; nhãn này hỏi chơi lại thay vì gọi `syscall 10` ngay.
+
+### Hiện nước vừa đi và số quân (tính năng tự đề xuất)
+
+- **Lý do:** Bàn cờ xoay sau mỗi lượt nên rất khó so sánh hai bàn cờ liên tiếp để biết đối phương vừa đi gì, nhất là sau một chuỗi ăn nhiều quân. Dòng trạng thái cho biết ngay nước vừa đi (theo ký hiệu cờ đam, ví dụ `16x23x30x21`) và số quân còn lại, giúp người chơi nắm thế cờ mà không phải tự đếm.
+- **Ví dụ:**
+
+  ```text
+  So quan: Den 12, Do 11
+  Nuoc vua di cua Den: 16x23
+  ```
+
+- **Cách làm:** `record_move` được gọi mỗi khi áp dụng một bước đi. Bước đầu của lượt (`$s7 = 0`) bắt đầu đường đi mới trong mảng `last_path` và ghi lại bên đi cùng cờ "ăn quân"; mỗi bước ăn tiếp chỉ nối thêm ô đích. `print_game_status` đếm quân trên `board`, rồi in từng ô trong `last_path` bằng `index_to_square`, nên số ô theo góc nhìn người đang xem bàn cờ. `new_game` đặt `last_path_len = 0` để ván mới không hiện nước của ván cũ.

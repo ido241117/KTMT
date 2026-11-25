@@ -1,4 +1,10 @@
 .data
+# Nuoc vua di: cac o da qua (chi so 0-63) theo thu tu, so o trong duong di,
+# ben da di va 1 neu la nuoc an. last_path_len = 0 khi chua co nuoc nao.
+last_path_len: .word 0
+last_player: .word 0
+last_capture: .word 0
+last_path: .space 16
 board:   .space 64
 input_buffer: .space 16
 move_list: .space 8
@@ -40,6 +46,10 @@ no_move_message: .asciiz "Doi phuong khong con nuoc di hop le.\n"
 black_wins: .asciiz "Den thang!\n"
 red_wins: .asciiz "Do thang!\n"
 quit_message: .asciiz "Ket thuc van choi.\n"
+status_count_black: .asciiz "So quan: Den "
+status_count_red: .asciiz ", Do "
+status_last_black: .asciiz "Nuoc vua di cua Den: "
+status_last_red: .asciiz "Nuoc vua di cua Do: "
 
 # Quy uoc thanh ghi dung xuyen suot chuong trinh chinh:
 #   $s0 = dia chi board        $s4 = luot hien tai (1 Den, -1 Do)
@@ -55,11 +65,13 @@ main:
 # Van moi: dat lai ban co, Den di truoc, khong o trong chuoi an.
 new_game:
     jal   initialize_board
+    sw    $zero, last_path_len
     li    $s4, 1
     move  $s7, $zero
 
 turn_start:
     jal   display_board
+    jal   print_game_status
 source_prompt:
     bgtz  $s4, source_prompt_black
     la    $a0, prompt_red
@@ -125,6 +137,7 @@ print_move_menu:
     srl   $s6, $t0, 1
 
 apply_move:
+    jal   record_move
     addu  $t0, $s0, $s1
     sb    $zero, 0($t0)
     addu  $t0, $s0, $s2
@@ -178,6 +191,7 @@ finish_turn:
     jal   has_any_move
     bne   $v0, $zero, turn_start
     jal   display_board
+    jal   print_game_status
     la    $a0, no_move_message
     li    $v0, 4
     syscall
@@ -573,6 +587,104 @@ validate_step:
     jr    $ra
 validate_invalid:
     move  $v0, $zero
+    jr    $ra
+
+# ---------------------------------------------------------------------------
+# record_move: ghi buoc di $s1 -> $s2 vao last_path. Buoc dau cua luot
+# ($s7 == 0) bat dau duong di moi; moi buoc an tiep chi them o dich.
+# ---------------------------------------------------------------------------
+record_move:
+    la    $t0, last_path
+    bne   $s7, $zero, record_append
+    sb    $s1, 0($t0)
+    li    $t1, 1
+    sw    $t1, last_path_len
+    sw    $s4, last_player
+    sw    $s6, last_capture
+record_append:
+    lw    $t1, last_path_len
+    addu  $t2, $t0, $t1
+    sb    $s2, 0($t2)
+    addiu $t1, $t1, 1
+    sw    $t1, last_path_len
+    jr    $ra
+
+# ---------------------------------------------------------------------------
+# print_game_status: in so quan moi ben va nuoc vua di cua doi phuong, vi du
+#   So quan: Den 12, Do 11
+#   Nuoc vua di cua Den: 16x23
+# So o in theo goc nhin ben dang di ($s4), giong so o tren ban co vua in.
+# ---------------------------------------------------------------------------
+print_game_status:
+    addiu $sp, $sp, -12
+    sw    $ra, 8($sp)
+    sw    $s1, 4($sp)
+    sw    $s2, 0($sp)
+    move  $s1, $zero
+    move  $s2, $zero
+    move  $t0, $zero
+status_count_loop:
+    addu  $t1, $s0, $t0
+    lb    $t1, 0($t1)
+    beq   $t1, $zero, status_count_next
+    bltz  $t1, status_count_is_red
+    addiu $s1, $s1, 1
+    j     status_count_next
+status_count_is_red:
+    addiu $s2, $s2, 1
+status_count_next:
+    addiu $t0, $t0, 1
+    slti  $t1, $t0, 64
+    bne   $t1, $zero, status_count_loop
+    la    $a0, status_count_black
+    move  $a1, $s1
+    la    $a2, status_count_red
+    jal   print_with_number
+    move  $a0, $s2
+    li    $v0, 1
+    syscall
+    la    $a0, newline
+    li    $v0, 4
+    syscall
+
+    lw    $t0, last_path_len
+    beq   $t0, $zero, status_done
+    lw    $t0, last_player
+    la    $a0, status_last_red
+    bltz  $t0, status_print_player
+    la    $a0, status_last_black
+status_print_player:
+    li    $v0, 4
+    syscall
+    move  $s1, $zero
+status_path_loop:
+    beq   $s1, $zero, status_print_square
+    li    $a0, 45
+    lw    $t0, last_capture
+    beq   $t0, $zero, status_print_separator
+    li    $a0, 120
+status_print_separator:
+    li    $v0, 11
+    syscall
+status_print_square:
+    la    $t0, last_path
+    addu  $t0, $t0, $s1
+    lbu   $a0, 0($t0)
+    jal   index_to_square
+    move  $a0, $v0
+    li    $v0, 1
+    syscall
+    addiu $s1, $s1, 1
+    lw    $t0, last_path_len
+    bne   $s1, $t0, status_path_loop
+    la    $a0, newline
+    li    $v0, 4
+    syscall
+status_done:
+    lw    $s2, 0($sp)
+    lw    $s1, 4($sp)
+    lw    $ra, 8($sp)
+    addiu $sp, $sp, 12
     jr    $ra
 
 # ---------------------------------------------------------------------------
