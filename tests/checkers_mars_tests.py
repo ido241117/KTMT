@@ -131,8 +131,29 @@ def test_board_rotates_for_red(mars_jar: Path) -> None:
     assert printed_boards(output, raw=True)[-1] == [
         "bbbb", "bbbb", "bbb.", "...b", "....", "rrrr", "rrrr", "rrrr"
     ]
-    red_part = output.split(RED_HEADER)[-1]
-    assert re.search(r"b 32 .*b 31 .*b 30 .*b 29 ", red_part.splitlines()[2])
+
+
+# Commit này code gì: Đánh số ô theo góc nhìn người đang đi; với Đỏ, ô dưới
+# cùng bên trái cũng là ô 29 (ô n của Đỏ là ô 33 - n theo cách đánh số chuẩn).
+# Input: Đen đi 21->17; Đỏ nhập 22->18 theo cách đánh số của Đỏ, tức là
+# 11->15 theo cách đánh số chuẩn.
+# Output mong đợi: Bàn cờ lượt Đỏ in ô 1-4 ở hàng trên cùng và ô 29 ở góc
+# dưới bên trái; sau nước Đỏ, quân Đỏ rời ô chuẩn 11 và đến ô chuẩn 15.
+def test_notation_follows_current_player(mars_jar: Path) -> None:
+    output = run_mars("21\n17\n22\n18\n0\n", mars_jar)
+    red_lines = [
+        line for line in output.split(RED_HEADER)[1].splitlines() if line.startswith("|")
+    ]
+    assert re.search(r"b  1 .*b  2 .*b  3 .*b  4 ", red_lines[0])
+    assert red_lines[7].startswith("| r 29 |")
+    board = printed_boards(output)[-1]
+    assert board[2:4] == ["rr.r", "..r."]
+
+
+# Các test bên dưới ghi số ô theo cách đánh số chuẩn (góc nhìn Đen). Hàm này
+# đổi một nước của Đỏ sang số ô mà người chơi Đỏ thực sự nhập (33 - n).
+def red_move(source: int, destination: int) -> str:
+    return f"{33 - source}\n{33 - destination}\n"
 
 
 # Commit này code gì: Kiểm tra ô xuất phát nằm trong 1-32, có quân và quân
@@ -183,7 +204,7 @@ def test_blocked_piece_does_not_soft_lock(mars_jar: Path) -> None:
 # Output mong đợi: Hiện lời nhắc lượt Đỏ sau nước Đen, lời nhắc lượt Đen sau
 # nước Đỏ và thông báo kết thúc ván chơi.
 def test_turns_alternate(mars_jar: Path) -> None:
-    output = run_mars("21\n17\n9\n13\n0\n", mars_jar)
+    output = run_mars("21\n17\n" + red_move(9, 13) + "0\n", mars_jar)
     assert "Den luot Do." in output
     assert "Den luot Den." in output
     assert "Ket thuc van choi." in output
@@ -199,7 +220,7 @@ def test_turns_alternate(mars_jar: Path) -> None:
 # quân Đen xuất hiện ở 10. Hàng 3, 4, 5 sau nước ăn:
 #   rbrr .... ....
 def test_capture_removes_opponent_piece(mars_jar: Path) -> None:
-    output = run_mars("21\n17\n10\n14\n17\n10\n0\n", mars_jar)
+    output = run_mars("21\n17\n" + red_move(10, 14) + "17\n10\n0\n", mars_jar)
     assert "Da an quan doi phuong." in output
     assert "Den luot Do." in output
     board = printed_boards(output)[-1]
@@ -208,8 +229,8 @@ def test_capture_removes_opponent_piece(mars_jar: Path) -> None:
 
 # Commit này code gì: Phong Tốt Đen khi chạm hàng cuối, cho vua đi/ăn cả
 # tiến lẫn lùi, và bắt buộc tiếp tục nếu vua còn nước ăn.
-# Input (các nước đơn để tạo thế ăn): Đen 21->17, 22->18, 23->19, 24->20,
-# 25->21; Đỏ 10->14, 11->15, 7->11, 12->16, 3->7.
+# Input (các nước đơn để tạo thế ăn, số ô chuẩn): Đen 21->17, 22->18,
+# 23->19, 24->20, 25->21; Đỏ 10->14, 11->15, 7->11, 12->16, 3->7.
 # Sau đó Đen nhập 17->10, chỉ nhập ô đến 3 để ăn tiếp và phong vua, rồi
 # nhập ô đến 12 để vua ăn lùi. Nhập 0 sau khi chuỗi ăn kết thúc.
 # Output mong đợi: Báo 3 quân bị ăn, hiện lời nhắc ăn tiếp 2 lần, báo phong
@@ -218,8 +239,12 @@ def test_capture_removes_opponent_piece(mars_jar: Path) -> None:
 #   r.rB
 def test_capture_chain_and_promotion(mars_jar: Path) -> None:
     input_text = (
-        "21\n17\n10\n14\n22\n18\n11\n15\n23\n19\n7\n11\n24\n20\n"
-        "12\n16\n25\n21\n3\n7\n17\n10\n3\n12\n0\n"
+        "21\n17\n" + red_move(10, 14)
+        + "22\n18\n" + red_move(11, 15)
+        + "23\n19\n" + red_move(7, 11)
+        + "24\n20\n" + red_move(12, 16)
+        + "25\n21\n" + red_move(3, 7)
+        + "17\n10\n3\n12\n0\n"
     )
     output = run_mars(input_text, mars_jar)
     assert output.count("Da an quan doi phuong.") == 3
@@ -294,6 +319,7 @@ def main() -> int:
     tests = (
         test_initial_board,
         test_board_rotates_for_red,
+        test_notation_follows_current_player,
         test_source_square_validation,
         test_basic_move_validation_and_application,
         test_blocked_piece_does_not_soft_lock,

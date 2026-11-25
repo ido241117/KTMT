@@ -72,3 +72,8 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 
 - **Lý do:** Bên Đỏ ngồi đối diện bên Đen; nếu bàn cờ luôn in với Đen ở dưới thì đến lượt Đỏ, người chơi phải tự hình dung ngược hướng đi. Xoay bàn cờ giúp cả hai bên luôn thấy quân mình ở dưới và đi lên.
 - **Cách làm:** `display_board` in dòng tiêu đề cho biết góc nhìn, rồi duyệt các ô hiển thị như cũ. Khi `$s4 < 0` (lượt Đỏ), ô hiển thị thứ `i` lấy dữ liệu từ ô `63 - i` của `board`, tức xoay 180 độ. Mảng `board` không đổi nên phần kiểm tra nước đi giữ nguyên.
+
+### Đánh số ô theo người đang đi
+
+- **Lý do:** Khi bàn cờ đã xoay, nếu số ô vẫn theo góc nhìn Đen thì Đỏ thấy số chạy ngược (32 ở góc trên bên trái), rất dễ nhập nhầm. Với cách đánh số theo người chơi, ô dưới cùng bên trái của cả hai bên đều là ô 29 và quân mình luôn nằm ở các ô 21–32 khi bắt đầu ván.
+- **Cách làm:** Xoay 180 độ biến ô số `n` thành ô số `33 - n`. Vì vậy `square_to_index` đổi `n` thành `33 - n` trước khi tính tọa độ khi `$s4 < 0`, còn `display_board` in số `33 - n` cho từng ô. Phần còn lại của chương trình vẫn làm việc với chỉ số 0–63 trong `board`.

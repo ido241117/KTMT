@@ -214,7 +214,8 @@ initialize_store:
 # display_board: in ban co dang luoi; moi o toi hien ky hieu quan (r/b/R/B,
 # '.' la o trong) kem so o 1-32 de nguoi choi biet can nhap so nao.
 # Ban co duoc in theo goc nhin cua ben dang di ($s4): luot Do thi xoay 180
-# do (o hien thi thu i la o 63 - i trong board) de quan Do cung di len.
+# do (o hien thi thu i la o 63 - i trong board) de quan Do cung di len, va
+# so o in ra cung danh theo goc nhin Do (o n chuan in thanh 33 - n).
 # ---------------------------------------------------------------------------
 display_board:
     la    $a0, newline
@@ -277,6 +278,10 @@ print_square:
     srl   $t3, $t3, 1
     addu  $t2, $t2, $t3
     addiu $t2, $t2, 1
+    bgtz  $s4, print_number_ready
+    li    $t3, 33
+    subu  $t2, $t3, $t2
+print_number_ready:
     slti  $t3, $t2, 10
     beq   $t3, $zero, print_square_number
     li    $a0, 32
@@ -363,13 +368,20 @@ read_invalid:
 
 # ---------------------------------------------------------------------------
 # square_to_index: doi so o 1-32 sang chi so 0-63 trong board.
+# So o duoc danh theo goc nhin ben dang di: voi Do, ban co xoay 180 do nen
+# o n cua Do la o 33 - n theo cach danh so chuan (goc nhin Den).
 # Moi hang co 4 o toi; hang chan (0, 2, ...) bat dau o cot 1, hang le o cot 0.
 # Vao: $a0 = so o. Tra ve: $v0 = chi so, hoac -1 neu ngoai khoang 1-32.
 # ---------------------------------------------------------------------------
 square_to_index:
     blt   $a0, 1, square_invalid
     bgt   $a0, 32, square_invalid
-    addiu $t0, $a0, -1
+    move  $t0, $a0
+    bgtz  $s4, square_perspective_ready
+    li    $t0, 33
+    subu  $t0, $t0, $a0
+square_perspective_ready:
+    addiu $t0, $t0, -1
     srl   $t1, $t0, 2
     andi  $t2, $t0, 3
     sll   $t2, $t2, 1
