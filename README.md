@@ -61,7 +61,7 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 
 1. `source_prompt` nhận ô xuất phát; `move_menu` gọi `build_move_list` và `print_move_list`, rồi đọc số thứ tự nước đi.
 2. `apply_move` cập nhật quân; nếu ăn thì xóa quân đối phương ở ô giữa. Nếu tốt đến hàng cuối, chương trình phong vua.
-3. Sau nước ăn, `build_move_list` (chỉ tính nước ăn khi `$s7 = 1`) tìm nước ăn tiếp cho cùng quân; nếu có thì quay lại `move_menu` và bắt buộc ăn tiếp.
+3. Sau nước ăn, `build_move_list` (chỉ tính nước ăn khi `$s7 = 1`) tìm nước ăn tiếp cho cùng quân; nếu có thì in lại bàn cờ và dòng trạng thái (để thấy vị trí sau bước ăn), rồi quay lại `move_menu` và bắt buộc ăn tiếp.
 4. `finish_turn` đổi lượt rồi gọi `has_any_move`. Nếu bên sắp đi hết quân hoặc mọi quân đều bị chặn, bên vừa đi thắng.
 
 ## Phạm vi

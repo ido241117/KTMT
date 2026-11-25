@@ -243,8 +243,12 @@ check_next_capture:
     move  $a1, $s3
     jal   build_move_list
     beq   $v0, $zero, finish_turn
-    # src = dst ; quay lai BUOC 3 voi cung quan
+    # src = dst
     move  $s1, $s2
+    # display_board() ; print_game_status()   (cho thay vi tri sau buoc an)
+    jal   display_board
+    jal   print_game_status
+    # quay lai BUOC 3 voi cung quan
     j     move_menu
 
     # ---------- BUOC 6: DOI LUOT VA KIEM TRA THANG ----------

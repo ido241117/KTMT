@@ -449,6 +449,30 @@ def test_status_records_capture_chain(mars_jar: Path) -> None:
     assert "So quan: Den 12, Do 9" in last_status
 
 
+# Commit này code gì: Khi ăn liên tiếp, in lại bàn cờ và nước vừa đi sau mỗi
+# bước ăn, trước khi liệt kê nước ăn tiếp.
+# Input: Thế cờ của test ăn liên tiếp; Đen ăn 17x10, 10x3, 3x12.
+# Output mong đợi (số ô chuẩn, 4 ô tối mỗi hàng):
+#   - Sau 17x10: hàng 3, 4 là "rbr." "..rr"; trạng thái "17x10".
+#   - Sau 10x3 (phong vua): hàng 1, 2, 3 là "rrBr" "rr.r" "r.r."; trạng
+#     thái "17x10x3".
+def test_board_reprinted_during_capture_chain(mars_jar: Path) -> None:
+    input_text = (
+        turn(21, 1) + turn(red(10), 2)
+        + turn(22, 1) + turn(red(11), 2)
+        + turn(23, 1) + turn(red(7), 1)
+        + turn(24, 1) + turn(red(12), 1)
+        + turn(25, 1) + turn(red(3), 1)
+        + turn(17, 1) + "1\n1\n0\n"
+    )
+    output = run_mars(input_text, mars_jar)
+    after_first, after_second = output.split("Co the an tiep.")[:2]
+    assert printed_boards(after_first)[-1][2:4] == ["rbr.", "..rr"]
+    assert "Nuoc vua di cua Den: 17x10\n" in after_first.split(BLACK_HEADER)[-1]
+    assert printed_boards(after_second)[-1][0:3] == ["rrBr", "rr.r", "r.r."]
+    assert "Nuoc vua di cua Den: 17x10x3\n" in after_second.split(BLACK_HEADER)[-1]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS integration tests.")
     parser.add_argument(
@@ -488,6 +512,7 @@ def main() -> int:
         test_play_again_after_game_ends,
         test_status_shows_last_move_and_counts,
         test_status_records_capture_chain,
+        test_board_reprinted_during_capture_chain,
     )
     try:
         for test in tests:
