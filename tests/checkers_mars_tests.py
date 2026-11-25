@@ -91,16 +91,33 @@ def test_source_square_validation(mars_jar: Path) -> None:
 
 # Commit này code gì: Kiểm tra ô đến trống, đúng hướng và đúng đường chéo;
 # chỉ sau khi hợp lệ mới cập nhật vị trí quân.
-# Input: Quân Đen ở 21 thử đi đến 13 (đi qua hai hàng, sai), 22 (có quân),
-# rồi đến 17 (đường chéo một ô, hợp lệ).
-# Output mong đợi: Hai nước đầu bị từ chối. Nước 21->17 được áp dụng:
+# Nước sai thì nhập lại cả ô xuất phát và ô đến.
+# Input: 21->13 (đi qua hai hàng, sai), 21->22 (có quân, sai), rồi 21->17
+# (đường chéo một ô, hợp lệ).
+# Output mong đợi: Hai nước đầu bị từ chối, mỗi lần đều hỏi lại ô xuất phát
+# (lời nhắc lượt Đen hiện 3 lần). Nước 21->17 được áp dụng:
 # hàng 5 có quân Đen ở ô đầu tiên; hàng 6 ô đầu tiên trong bốn ô trống.
 def test_basic_move_validation_and_application(mars_jar: Path) -> None:
-    output = run_mars("21\n13\n22\n17\n", mars_jar)
+    output = run_mars("21\n13\n21\n22\n21\n17\n", mars_jar)
     assert output.count("Nuoc di khong hop le") == 2
+    assert output.count("Den luot Den.") == 3
     board = printed_boards(output)[-1]
     assert board[4] == "b..."
     assert board[5] == ".bbb"
+
+
+# Chọn nhầm quân bị chặn không làm treo chương trình.
+# Input: Đen chọn 29 (bị chặn) và thử 25 (có quân, sai), rồi chọn lại 21->17.
+# Output mong đợi: Một lần báo nước đi sai, sau đó hỏi lại ô xuất phát; nước
+# 21->17 được áp dụng và quân ở 29 vẫn nằm yên.
+def test_blocked_piece_does_not_soft_lock(mars_jar: Path) -> None:
+    output = run_mars("29\n25\n21\n17\n0\n", mars_jar)
+    assert output.count("Nuoc di khong hop le") == 1
+    assert output.count("Den luot Den.") == 2
+    board = printed_boards(output)[-1]
+    assert board[4] == "b..."
+    assert board[5] == ".bbb"
+    assert board[7] == "bbbb"
 
 
 # Commit này code gì: Hoàn tất một nước của Đen rồi một nước của Đỏ, sau đó
@@ -216,6 +233,7 @@ def main() -> int:
         test_initial_board,
         test_source_square_validation,
         test_basic_move_validation_and_application,
+        test_blocked_piece_does_not_soft_lock,
         test_turns_alternate,
         test_capture_removes_opponent_piece,
         test_capture_chain_and_promotion,

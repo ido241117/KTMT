@@ -10,7 +10,7 @@ Mở MARS và nạp `checkers.asm`, hoặc chạy MARS từ PowerShell:
 java -jar "C:\Users\ADMIN\Downloads\Mars4_5.jar" checkers.asm
 ```
 
-Đen đi trước. Mỗi lượt nhập số ô xuất phát rồi số ô đến. Khi chương trình yêu cầu ăn tiếp, chỉ nhập ô đến tiếp theo; quân vừa ăn sẽ tiếp tục di chuyển. Nhập `0` tại lời nhắc ô xuất phát để thoát.
+Đen đi trước. Mỗi lượt nhập số ô xuất phát rồi số ô đến. Khi chương trình yêu cầu ăn tiếp, chỉ nhập ô đến tiếp theo; quân vừa ăn sẽ tiếp tục di chuyển. Nhập `0` tại lời nhắc ô xuất phát để thoát. Nếu nước đi không hợp lệ, chương trình yêu cầu nhập lại cả ô xuất phát và ô đến (trong chuỗi ăn bắt buộc chỉ nhập lại ô đến).
 
 ## Chạy testcase
 

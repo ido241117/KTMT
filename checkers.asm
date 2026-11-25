@@ -10,7 +10,7 @@ prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, 0 de thoat): "
 dest_prompt: .asciiz "Nhap o den (1-32): "
 continue_prompt: .asciiz "Co the an tiep. Nhap o den tiep theo (1-32): "
 invalid: .asciiz "O xuat phat khong hop le hoac khong phai quan cua ban. Hay thu lai.\n"
-invalid_move: .asciiz "Nuoc di khong hop le. Hay chon o den khac.\n"
+invalid_move: .asciiz "Nuoc di khong hop le. Hay thu lai.\n"
 capture_message: .asciiz "Da an quan doi phuong.\n"
 promotion_message: .asciiz "Quan tot duoc phong vua.\n"
 black_wins: .asciiz "Den thang!\n"
@@ -311,10 +311,14 @@ switch_turn:
     subu  $s4, $zero, $s4
     j     display_board
 
+# Nuoc di sai ngoai chuoi an ($s7 == 0): nhap lai ca o xuat phat va o den
+# (khop req.md), nen chon nham quan bi chan cung khong bi ket. Trong chuoi
+# an bat buoc ($s7 != 0) quan an phai giu nguyen, chi nhap lai o den.
 invalid_destination:
     la    $a0, invalid_move
     li    $v0, 4
     syscall
+    beq   $s7, $zero, source_prompt
     j     destination_prompt
 
 game_exit:
