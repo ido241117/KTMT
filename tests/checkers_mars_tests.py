@@ -186,7 +186,7 @@ def test_error_messages_explain_reason(mars_jar: Path) -> None:
         "abc\n33\n15\n9\n29\n21\n7\n21\n?\n" + turn(21, 1) + "9\n0\n", mars_jar
     )
     expected = [
-        "Loi: dau vao khong hop le. Hay nhap so o tu 1 den 32 (H de nghi hoa, 0 de thoat).",
+        "Loi: dau vao khong hop le. Hay nhap so o tu 1 den 32 (H de nghi hoa, M choi lai, 0 de thoat).",
         "Loi: o 33 nam ngoai khoang 1-32.",
         "Loi: o 15 dang trong, khong co quan de di.",
         "Loi: o 9 la quan cua doi phuong. Hay chon quan cua ban.",
@@ -380,6 +380,34 @@ def test_draw_offer_can_be_declined(mars_jar: Path) -> None:
     assert printed_boards(output)[-1][4] == "b..."
 
 
+# Commit này code gì: Lệnh M ở lời nhắc ô xuất phát bắt đầu lại ván mới mà
+# không thoát chương trình.
+# Input: Đen đi 21->17; Đỏ nhập M; ván mới bắt đầu, Đen nhập 0 để thoát.
+# Output mong đợi: Báo bắt đầu ván mới, bàn cờ in lại vị trí ban đầu và đến
+# lượt Đen.
+def test_restart_during_game(mars_jar: Path) -> None:
+    output = run_mars(turn(21, 1) + "M\n0\n", mars_jar)
+    assert "Bat dau van moi." in output
+    after_restart = output.split("Bat dau van moi.")[-1]
+    assert BLACK_HEADER in after_restart and "Den luot Den." in after_restart
+    assert printed_boards(output)[-1] == ["rrrr"] * 3 + ["...."] * 2 + ["bbbb"] * 3
+    assert "Ket thuc van choi." in output
+
+
+# Commit này code gì: Khi ván kết thúc, hỏi người chơi có muốn chơi ván mới.
+# Input: Hai bên đồng ý hòa, nhập M để chơi ván mới, Đen đi 22->18, rồi Đỏ
+# hòa lần nữa và lần này nhập phím khác để thoát.
+# Output mong đợi: Hỏi chơi lại hai lần; ván thứ hai bắt đầu từ vị trí ban đầu
+# và chơi được bình thường; lần thứ hai thoát chương trình.
+def test_play_again_after_game_ends(mars_jar: Path) -> None:
+    output = run_mars("H\nH\nM\n" + turn(22, 2) + "H\nH\nk\n", mars_jar)
+    assert output.count("Van co hoa!") == 2
+    assert output.count("Nhap M de choi van moi") == 2
+    assert output.count("Bat dau van moi.") == 1
+    assert printed_boards(output)[-1][4:6] == [".b..", "b.bb"]
+    assert "Ket thuc van choi." in output.split("Nhap M de choi van moi")[-1]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS integration tests.")
     parser.add_argument(
@@ -415,6 +443,8 @@ def main() -> int:
         test_non_numeric_input_is_rejected,
         test_draw_when_both_sides_agree,
         test_draw_offer_can_be_declined,
+        test_restart_during_game,
+        test_play_again_after_game_ends,
     )
     try:
         for test in tests:

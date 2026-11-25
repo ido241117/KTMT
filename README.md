@@ -10,7 +10,7 @@ Mở MARS và nạp `checkers.asm`, hoặc chạy MARS từ PowerShell:
 java -jar "C:\Users\ADMIN\Downloads\Mars4_5.jar" checkers.asm
 ```
 
-Đen đi trước. Mỗi lượt nhập số ô của quân muốn đi; chương trình liệt kê các nước đi hợp lệ của quân đó (ví dụ `1) 22-17`, `2) 22-18`, dấu `x` là nước ăn) và người chơi nhập số thứ tự nước muốn đi. Khi có thể ăn tiếp, chương trình liệt kê các nước ăn tiếp của quân vừa ăn để chọn tiếp. Nhập `0` tại lời nhắc ô xuất phát để thoát, `H` để đề nghị hòa. Nếu lựa chọn không hợp lệ, chương trình yêu cầu chọn lại từ ô xuất phát (trong chuỗi ăn bắt buộc chỉ chọn lại nước ăn).
+Đen đi trước. Mỗi lượt nhập số ô của quân muốn đi; chương trình liệt kê các nước đi hợp lệ của quân đó (ví dụ `1) 22-17`, `2) 22-18`, dấu `x` là nước ăn) và người chơi nhập số thứ tự nước muốn đi. Khi có thể ăn tiếp, chương trình liệt kê các nước ăn tiếp của quân vừa ăn để chọn tiếp. Nhập `0` tại lời nhắc ô xuất phát để thoát, `H` để đề nghị hòa, `M` để chơi lại từ đầu. Nếu lựa chọn không hợp lệ, chương trình yêu cầu chọn lại từ ô xuất phát (trong chuỗi ăn bắt buộc chỉ chọn lại nước ăn).
 
 ## Chạy testcase
 
@@ -108,3 +108,9 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 - **Lý do:** Có những thế cờ không bên nào thắng được (ví dụ mỗi bên chỉ còn một vua). Nếu không có hòa, người chơi chỉ còn cách thoát chương trình và ván cờ không có kết quả.
 - **Cách dùng:** Tại lời nhắc ô xuất phát, nhập `H` (hoặc `h`) để đề nghị hòa. Chương trình hỏi ngay bên kia; bên kia nhập `H` (cũng đề nghị hòa) thì ván kết thúc hòa, nhập bất kỳ thứ gì khác là từ chối và bên đề nghị tiếp tục lượt của mình.
 - **Cách làm:** `read_number` nhận thêm lệnh một chữ cái: dòng chỉ gồm một chữ cái (bỏ qua khoảng trắng) trả về `$v0 = -2` và chữ cái viết hoa trong `$v1`. Chữ cái được đổi về chữ thường bằng `ori` với `0x20` để chỉ cần so sánh một khoảng `'a'`–`'z'`. `source_command` chuyển lệnh `H` đến `offer_draw`; các chữ cái khác bị báo lỗi như dữ liệu sai.
+
+### Chơi lại không cần thoát chương trình
+
+- **Lý do:** Trên MARS, chạy lại chương trình nghĩa là phải dừng, nạp lại (assemble) rồi chạy lại. Khi muốn chơi nhiều ván liên tiếp hoặc bắt đầu lại một ván đi hỏng, chơi lại ngay trong chương trình nhanh hơn nhiều.
+- **Cách dùng:** Nhập `M` tại lời nhắc ô xuất phát để bỏ ván hiện tại và bắt đầu ván mới. Khi ván kết thúc (thắng hoặc hòa), chương trình hỏi `Nhap M de choi van moi`; nhập phím khác để thoát.
+- **Cách làm:** Phần khởi tạo trong `main` được đặt nhãn `new_game` (gọi `initialize_board`, đặt `$s4 = 1`, `$s7 = 0`). `restart_game` in thông báo rồi nhảy về `new_game`. Mọi đường kết thúc ván (thắng hoặc hòa) đều đi qua `game_over`; nhãn này hỏi chơi lại thay vì gọi `syscall 10` ngay.

@@ -9,8 +9,10 @@ board_border: .asciiz "+------+------+------+------+------+------+------+------+
 cell_left: .asciiz "| "
 light_cell: .asciiz "     "
 row_end: .asciiz "|\n"
-prompt_black: .asciiz "Den luot Den. Nhap o xuat phat (1-32, H de nghi hoa, 0 de thoat): "
-prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, H de nghi hoa, 0 de thoat): "
+prompt_black: .asciiz "Den luot Den. Nhap o xuat phat (1-32, H de nghi hoa, M choi lai, 0 de thoat): "
+prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, H de nghi hoa, M choi lai, 0 de thoat): "
+restart_message: .asciiz "Bat dau van moi.\n"
+play_again_prompt: .asciiz "Van co da ket thuc. Nhap M de choi van moi, phim khac de thoat: "
 draw_offer_black: .asciiz "Den de nghi hoa. Do co dong y khong? Nhap H de dong y, phim khac de tu choi: "
 draw_offer_red: .asciiz "Do de nghi hoa. Den co dong y khong? Nhap H de dong y, phim khac de tu choi: "
 draw_declined: .asciiz "De nghi hoa bi tu choi. Van co tiep tuc.\n"
@@ -22,7 +24,7 @@ move_item_separator: .asciiz ") "
 choice_prompt: .asciiz "Chon nuoc di (1-"
 choice_prompt_end: .asciiz "): "
 continue_message: .asciiz "Co the an tiep.\n"
-error_square_not_number: .asciiz "Loi: dau vao khong hop le. Hay nhap so o tu 1 den 32 (H de nghi hoa, 0 de thoat).\n"
+error_square_not_number: .asciiz "Loi: dau vao khong hop le. Hay nhap so o tu 1 den 32 (H de nghi hoa, M choi lai, 0 de thoat).\n"
 error_square_prefix: .asciiz "Loi: o "
 error_out_of_range_suffix: .asciiz " nam ngoai khoang 1-32.\n"
 error_empty_suffix: .asciiz " dang trong, khong co quan de di.\n"
@@ -50,6 +52,8 @@ quit_message: .asciiz "Ket thuc van choi.\n"
 .globl main
 main:
     la    $s0, board
+# Van moi: dat lai ban co, Den di truoc, khong o trong chuoi an.
+new_game:
     jal   initialize_board
     li    $s4, 1
     move  $s7, $zero
@@ -185,15 +189,31 @@ black_wins_game:
 print_winner:
     li    $v0, 4
     syscall
+# Van ket thuc (thang hoac hoa): hoi co choi van moi khong thay vi thoat ngay.
 game_over:
-    li    $v0, 10
+    la    $a0, play_again_prompt
+    li    $v0, 4
     syscall
+    jal   read_number
+    li    $t0, -2
+    bne   $v0, $t0, game_exit
+    li    $t0, 77
+    bne   $v1, $t0, game_exit
+    j     restart_game
 
-# Lenh mot chu cai tai loi nhac o xuat phat. H = de nghi hoa.
+# Lenh mot chu cai tai loi nhac o xuat phat. H = de nghi hoa, M = choi lai.
 source_command:
     li    $t0, 72
     beq   $v1, $t0, offer_draw
+    li    $t0, 77
+    beq   $v1, $t0, restart_game
     j     invalid_source_input
+
+restart_game:
+    la    $a0, restart_message
+    li    $v0, 4
+    syscall
+    j     new_game
 
 # De nghi hoa: hoi ben kia ngay; ben kia cung nhap H (cung de nghi hoa) thi
 # van co ket thuc hoa, nguoc lai ben de nghi tiep tuc luot cua minh.
