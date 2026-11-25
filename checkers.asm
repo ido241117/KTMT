@@ -9,8 +9,12 @@ board_border: .asciiz "+------+------+------+------+------+------+------+------+
 cell_left: .asciiz "| "
 light_cell: .asciiz "     "
 row_end: .asciiz "|\n"
-prompt_black: .asciiz "Den luot Den. Nhap o xuat phat (1-32, 0 de thoat): "
-prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, 0 de thoat): "
+prompt_black: .asciiz "Den luot Den. Nhap o xuat phat (1-32, H de nghi hoa, 0 de thoat): "
+prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, H de nghi hoa, 0 de thoat): "
+draw_offer_black: .asciiz "Den de nghi hoa. Do co dong y khong? Nhap H de dong y, phim khac de tu choi: "
+draw_offer_red: .asciiz "Do de nghi hoa. Den co dong y khong? Nhap H de dong y, phim khac de tu choi: "
+draw_declined: .asciiz "De nghi hoa bi tu choi. Van co tiep tuc.\n"
+draw_message: .asciiz "Hai ben dong y hoa. Van co hoa!\n"
 moves_header: .asciiz "Cac nuoc di cua quan o "
 moves_header_end: .asciiz ":\n"
 move_item_indent: .asciiz "  "
@@ -18,7 +22,7 @@ move_item_separator: .asciiz ") "
 choice_prompt: .asciiz "Chon nuoc di (1-"
 choice_prompt_end: .asciiz "): "
 continue_message: .asciiz "Co the an tiep.\n"
-error_square_not_number: .asciiz "Loi: dau vao khong phai so nguyen. Hay nhap so o tu 1 den 32 (0 de thoat).\n"
+error_square_not_number: .asciiz "Loi: dau vao khong hop le. Hay nhap so o tu 1 den 32 (H de nghi hoa, 0 de thoat).\n"
 error_square_prefix: .asciiz "Loi: o "
 error_out_of_range_suffix: .asciiz " nam ngoai khoang 1-32.\n"
 error_empty_suffix: .asciiz " dang trong, khong co quan de di.\n"
@@ -62,6 +66,8 @@ source_prompt_print:
     li    $v0, 4
     syscall
     jal   read_number
+    li    $t0, -2
+    beq   $v0, $t0, source_command
     bltz  $v0, invalid_source_input
     beq   $v0, $zero, game_exit
     move  $s2, $v0
@@ -179,8 +185,41 @@ black_wins_game:
 print_winner:
     li    $v0, 4
     syscall
+game_over:
     li    $v0, 10
     syscall
+
+# Lenh mot chu cai tai loi nhac o xuat phat. H = de nghi hoa.
+source_command:
+    li    $t0, 72
+    beq   $v1, $t0, offer_draw
+    j     invalid_source_input
+
+# De nghi hoa: hoi ben kia ngay; ben kia cung nhap H (cung de nghi hoa) thi
+# van co ket thuc hoa, nguoc lai ben de nghi tiep tuc luot cua minh.
+offer_draw:
+    bgtz  $s4, offer_draw_black
+    la    $a0, draw_offer_red
+    j     offer_draw_print
+offer_draw_black:
+    la    $a0, draw_offer_black
+offer_draw_print:
+    li    $v0, 4
+    syscall
+    jal   read_number
+    li    $t0, -2
+    bne   $v0, $t0, draw_rejected
+    li    $t0, 72
+    bne   $v1, $t0, draw_rejected
+    la    $a0, draw_message
+    li    $v0, 4
+    syscall
+    j     game_over
+draw_rejected:
+    la    $a0, draw_declined
+    li    $v0, 4
+    syscall
+    j     source_prompt
 
 # Moi loi o xuat phat neu ro nguyen nhan; cac loi lien quan den mot o in kem
 # so o nguoi choi vua nhap ($s2), vi du "Loi: o 15 dang trong, ...".
@@ -365,8 +404,9 @@ next_column:
 # ---------------------------------------------------------------------------
 # read_number: doc mot dong bang syscall 8 (khong dung syscall 5 vi MARS dung
 # chuong trinh khi gap ky tu khong phai so). Chap nhan khoang trang hai dau
-# va toi da 3 chu so.
-# Tra ve: $v0 = so doc duoc (>= 0), hoac -1 neu dong trong / sai dinh dang.
+# va toi da 3 chu so. Mot chu cai dung rieng (vi du "h") la mot lenh.
+# Tra ve: $v0 = so doc duoc (>= 0), -1 neu dong trong / sai dinh dang, hoac
+#         -2 neu la lenh mot chu cai; khi do $v1 = chu cai do (viet hoa).
 # ---------------------------------------------------------------------------
 read_number:
     la    $a0, input_buffer
@@ -376,12 +416,23 @@ read_number:
     la    $t0, input_buffer
     move  $v0, $zero
     move  $t1, $zero
+    move  $t6, $zero
 read_skip_leading:
     lb    $t2, 0($t0)
     li    $t3, 32
-    bne   $t2, $t3, read_digits
+    bne   $t2, $t3, read_check_letter
     addiu $t0, $t0, 1
     j     read_skip_leading
+# OR voi 0x20 bien chu hoa thanh chu thuong, nen chi can so voi 'a'-'z'.
+read_check_letter:
+    ori   $t3, $t2, 32
+    slti  $t4, $t3, 97
+    bne   $t4, $zero, read_digits
+    slti  $t4, $t3, 123
+    beq   $t4, $zero, read_digits
+    addiu $t6, $t3, -32
+    addiu $t0, $t0, 1
+    j     read_trailing
 read_digits:
     lb    $t2, 0($t0)
     slti  $t3, $t2, 48
@@ -410,7 +461,12 @@ read_skip_trailing:
     addiu $t0, $t0, 1
     j     read_trailing
 read_end:
+    bne   $t6, $zero, read_command
     beq   $t1, $zero, read_invalid
+    jr    $ra
+read_command:
+    li    $v0, -2
+    move  $v1, $t6
     jr    $ra
 read_invalid:
     li    $v0, -1

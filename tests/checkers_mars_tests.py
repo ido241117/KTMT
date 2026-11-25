@@ -186,7 +186,7 @@ def test_error_messages_explain_reason(mars_jar: Path) -> None:
         "abc\n33\n15\n9\n29\n21\n7\n21\n?\n" + turn(21, 1) + "9\n0\n", mars_jar
     )
     expected = [
-        "Loi: dau vao khong phai so nguyen. Hay nhap so o tu 1 den 32 (0 de thoat).",
+        "Loi: dau vao khong hop le. Hay nhap so o tu 1 den 32 (H de nghi hoa, 0 de thoat).",
         "Loi: o 33 nam ngoai khoang 1-32.",
         "Loi: o 15 dang trong, khong co quan de di.",
         "Loi: o 9 la quan cua doi phuong. Hay chon quan cua ban.",
@@ -352,6 +352,34 @@ def test_non_numeric_input_is_rejected(mars_jar: Path) -> None:
     assert board[5] == ".bbb"
 
 
+# Commit này code gì: Cho phép đề nghị hòa bằng lệnh H ở lời nhắc ô xuất
+# phát; nếu bên kia cũng nhập H thì ván kết thúc hòa.
+# Input: Đen nhập "h" (chữ thường cũng được), Đỏ nhập "H" để đồng ý.
+# Output mong đợi: Hỏi Đỏ có đồng ý không, báo ván cờ hòa và kết thúc; không
+# in kết quả thắng thua.
+def test_draw_when_both_sides_agree(mars_jar: Path) -> None:
+    output = run_mars("h\nH\n", mars_jar)
+    assert "Den de nghi hoa. Do co dong y khong?" in output
+    assert "Hai ben dong y hoa. Van co hoa!" in output
+    assert "thang!" not in output
+    assert "Nhap o xuat phat" not in output.split("Van co hoa!")[-1]
+
+
+# Commit này code gì: Bên kia từ chối hòa thì ván cờ tiếp tục, bên đề nghị vẫn
+# giữ lượt đi của mình.
+# Input: Đen nhập H, Đỏ nhập 0 (từ chối); Đen đi 21->17; sang lượt Đỏ, Đỏ nhập
+# H và Đen nhập "khong" (từ chối, không phải chữ H); Đỏ nhập 0 để thoát.
+# Output mong đợi: Báo từ chối hai lần, nước 21->17 vẫn được áp dụng, không
+# kết thúc hòa.
+def test_draw_offer_can_be_declined(mars_jar: Path) -> None:
+    output = run_mars("H\n0\n" + turn(21, 1) + "H\nkhong\n0\n", mars_jar)
+    assert "Do de nghi hoa. Den co dong y khong?" in output
+    assert output.count("De nghi hoa bi tu choi. Van co tiep tuc.") == 2
+    assert "Van co hoa!" not in output
+    assert "Ket thuc van choi." in output
+    assert printed_boards(output)[-1][4] == "b..."
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run checkers MARS integration tests.")
     parser.add_argument(
@@ -385,6 +413,8 @@ def main() -> int:
         test_win_when_opponent_has_no_pieces,
         test_win_when_opponent_is_blocked,
         test_non_numeric_input_is_rejected,
+        test_draw_when_both_sides_agree,
+        test_draw_offer_can_be_declined,
     )
     try:
         for test in tests:

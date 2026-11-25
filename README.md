@@ -10,7 +10,7 @@ Mở MARS và nạp `checkers.asm`, hoặc chạy MARS từ PowerShell:
 java -jar "C:\Users\ADMIN\Downloads\Mars4_5.jar" checkers.asm
 ```
 
-Đen đi trước. Mỗi lượt nhập số ô của quân muốn đi; chương trình liệt kê các nước đi hợp lệ của quân đó (ví dụ `1) 22-17`, `2) 22-18`, dấu `x` là nước ăn) và người chơi nhập số thứ tự nước muốn đi. Khi có thể ăn tiếp, chương trình liệt kê các nước ăn tiếp của quân vừa ăn để chọn tiếp. Nhập `0` tại lời nhắc ô xuất phát để thoát. Nếu lựa chọn không hợp lệ, chương trình yêu cầu chọn lại từ ô xuất phát (trong chuỗi ăn bắt buộc chỉ chọn lại nước ăn).
+Đen đi trước. Mỗi lượt nhập số ô của quân muốn đi; chương trình liệt kê các nước đi hợp lệ của quân đó (ví dụ `1) 22-17`, `2) 22-18`, dấu `x` là nước ăn) và người chơi nhập số thứ tự nước muốn đi. Khi có thể ăn tiếp, chương trình liệt kê các nước ăn tiếp của quân vừa ăn để chọn tiếp. Nhập `0` tại lời nhắc ô xuất phát để thoát, `H` để đề nghị hòa. Nếu lựa chọn không hợp lệ, chương trình yêu cầu chọn lại từ ô xuất phát (trong chuỗi ăn bắt buộc chỉ chọn lại nước ăn).
 
 ## Chạy testcase
 
@@ -48,7 +48,7 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 |---|---|
 | `initialize_board` | Đặt quân Đỏ ở ba hàng trên, quân Đen ở ba hàng dưới. |
 | `display_board` | In trạng thái bàn cờ. |
-| `read_number` | Đọc một dòng bằng `syscall 8` rồi tự chuyển sang số; trả về `-1` nếu dòng trống hoặc không phải số. |
+| `read_number` | Đọc một dòng bằng `syscall 8` rồi tự chuyển sang số; trả về `-1` nếu dòng trống hoặc không phải số, `-2` (kèm chữ cái trong `$v1`) nếu là lệnh một chữ cái. |
 | `square_to_index` | Đổi số ô 1–32 (theo góc nhìn bên đang đi) sang chỉ số 0–63 trong `board`. |
 | `index_to_square` | Đổi ngược chỉ số 0–63 sang số ô 1–32 để in ra. |
 | `validate_move` | Kiểm tra ô đến trống, đúng hướng, đúng đường chéo; trả về 0 (sai), 1 (đi thường) hoặc 2 (ăn quân). |
@@ -102,3 +102,9 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
   | Lựa chọn ngoài danh sách | `Loi: lua chon 7 khong co trong danh sach.` |
 
 - **Cách làm:** Mỗi lần kiểm tra thất bại nhảy đến một nhãn riêng (`source_out_of_range`, `source_empty`, `source_opponent`, `piece_has_no_moves`, `choice_out_of_range`, ...). Các nhãn này chỉ chọn phần đuôi thông báo rồi dùng chung hàm `print_with_number` để in "phần đầu + số đã nhập + phần đuôi". Số ô vừa nhập được giữ trong `$s2` trong lúc chọn quân. Số in ra đúng là số người chơi đã gõ, nên với Đỏ vẫn là số theo góc nhìn Đỏ.
+
+### Đề nghị hòa
+
+- **Lý do:** Có những thế cờ không bên nào thắng được (ví dụ mỗi bên chỉ còn một vua). Nếu không có hòa, người chơi chỉ còn cách thoát chương trình và ván cờ không có kết quả.
+- **Cách dùng:** Tại lời nhắc ô xuất phát, nhập `H` (hoặc `h`) để đề nghị hòa. Chương trình hỏi ngay bên kia; bên kia nhập `H` (cũng đề nghị hòa) thì ván kết thúc hòa, nhập bất kỳ thứ gì khác là từ chối và bên đề nghị tiếp tục lượt của mình.
+- **Cách làm:** `read_number` nhận thêm lệnh một chữ cái: dòng chỉ gồm một chữ cái (bỏ qua khoảng trắng) trả về `$v0 = -2` và chữ cái viết hoa trong `$v1`. Chữ cái được đổi về chữ thường bằng `ori` với `0x20` để chỉ cần so sánh một khoảng `'a'`–`'z'`. `source_command` chuyển lệnh `H` đến `offer_draw`; các chữ cái khác bị báo lỗi như dữ liệu sai.
