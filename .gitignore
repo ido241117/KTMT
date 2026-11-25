@@ -1,2 +1,3 @@
 checkers_example.asm
 .env
+tests/__pycache__/checkers_mars_tests.cpython-313.pyc

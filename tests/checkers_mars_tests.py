@@ -43,11 +43,37 @@ def run_mars(
         encoding="utf-8",
         errors="replace",
         check=False,
+        timeout=60,
     )
     output = result.stdout + result.stderr
     if result.returncode:
         raise AssertionError(f"MARS exited with {result.returncode}:\n{output}")
     return output
+
+
+# Chạy chương trình với bàn cờ thử: chèn đoạn mã xóa bàn cờ và đặt quân
+# (chỉ số 0-63 -> giá trị quân) ngay sau khi khởi tạo, trước lượt đầu tiên.
+def run_mars_with_board(pieces: dict[int, int], input_text: str, mars_jar: Path) -> str:
+    source = ASSEMBLY_PATH.read_text(encoding="utf-8")
+    marker = "    li    $s4, 1\n    move  $s7, $zero\n"
+    setup = """\
+    li    $t0, 0
+test_clear_board:
+    addu  $t1, $s0, $t0
+    sb    $zero, 0($t1)
+    addiu $t0, $t0, 1
+    slti  $t2, $t0, 64
+    bne   $t2, $zero, test_clear_board
+"""
+    for index, value in pieces.items():
+        setup += f"    li    $t2, {value}\n    sb    $t2, {index}($s0)\n"
+    assert source.count(marker) == 1
+    fixture_source = source.replace(marker, setup + marker, 1)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        fixture_path = Path(temp_dir) / "checkers_fixture.asm"
+        fixture_path.write_text(fixture_source, encoding="utf-8")
+        return run_mars(input_text, mars_jar, fixture_path)
 
 
 # Bàn cờ được in dạng lưới, mỗi ô tối có ký hiệu quân và số ô, ví dụ hàng 1:
@@ -171,8 +197,8 @@ def test_capture_chain_and_promotion(mars_jar: Path) -> None:
     assert printed_boards(output)[-1][2] == "r.rB"
 
 
-# Commit này code gì: Đếm số quân còn lại của đối thủ sau lượt; nếu không còn
-# quân thì thông báo bên thắng và kết thúc chương trình.
+# Commit này code gì: Sau lượt, nếu đối thủ không còn quân (nên cũng không
+# còn nước đi) thì thông báo bên thắng và kết thúc chương trình.
 # Để testcase ngắn gọn, nó tạo bàn cờ thử: xóa hết quân, đặt Đen ở 18 và Đỏ
 # ở 14. Vị trí trước nước ăn:
 #   4 0   r   0   0
@@ -181,34 +207,24 @@ def test_capture_chain_and_promotion(mars_jar: Path) -> None:
 # Output mong đợi: Ô 14 và 18 trống, quân Đen ở 9; chương trình in
 # "Đen thắng!" và dừng, không hỏi nhập lượt tiếp theo.
 def test_win_when_opponent_has_no_pieces(mars_jar: Path) -> None:
-    source = ASSEMBLY_PATH.read_text(encoding="utf-8")
-    marker = "    li    $s4, 1\n    move  $s7, $zero\n"
-    setup = """\
-    li    $t0, 0
-test_clear_board:
-    addu  $t1, $s0, $t0
-    sb    $zero, 0($t1)
-    addiu $t0, $t0, 1
-    slti  $t2, $t0, 64
-    bne   $t2, $zero, test_clear_board
-    li    $t0, 35
-    addu  $t1, $s0, $t0
-    li    $t2, 1
-    sb    $t2, 0($t1)
-    li    $t0, 26
-    addu  $t1, $s0, $t0
-    li    $t2, -1
-    sb    $t2, 0($t1)
-"""
-    assert source.count(marker) == 1
-    fixture_source = source.replace(marker, setup + marker, 1)
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        fixture_path = Path(temp_dir) / "checkers_win_test.asm"
-        fixture_path.write_text(fixture_source, encoding="utf-8")
-        output = run_mars("18\n9\n", mars_jar, fixture_path)
-
+    output = run_mars_with_board({35: 1, 26: -1}, "18\n9\n", mars_jar)
     assert "Den thang!" in output
+    assert "Nhap o xuat phat" not in output.split("Da an quan doi phuong.")[-1]
+
+
+# Commit này code gì: Đọc input bằng syscall 8 và tự chuyển sang số, để chữ
+# cái hoặc dòng trống không làm MARS dừng chương trình.
+# Input: "abc" và dòng trống ở ô xuất phát, " 21 " (có khoảng trắng), "x" ở
+# ô đến (bị bắt nhập lại cả hai ô), rồi 21->17 và 0 để thoát.
+# Output mong đợi: Báo đầu vào không phải số 3 lần, nước 21->17 được áp dụng.
+def test_non_numeric_input_is_rejected(mars_jar: Path) -> None:
+    output = run_mars("abc\n\n 21 \nx\n21\n17\n0\n", mars_jar)
+    assert output.count("Dau vao khong phai so nguyen") == 3
+    assert output.count("Den luot Den.") == 4
+    assert "Ket thuc van choi." in output
+    board = printed_boards(output)[-1]
+    assert board[4] == "b..."
+    assert board[5] == ".bbb"
 
 
 def main() -> int:
@@ -238,12 +254,13 @@ def main() -> int:
         test_capture_removes_opponent_piece,
         test_capture_chain_and_promotion,
         test_win_when_opponent_has_no_pieces,
+        test_non_numeric_input_is_rejected,
     )
     try:
         for test in tests:
             test(mars_jar)
             print(f"PASS: {test.__name__}")
-    except (AssertionError, OSError, RuntimeError) as error:
+    except (AssertionError, OSError, RuntimeError, subprocess.TimeoutExpired) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 

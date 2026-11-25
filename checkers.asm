@@ -1,5 +1,6 @@
 .data
 board:   .space 64
+input_buffer: .space 16
 newline: .asciiz "\n"
 board_border: .asciiz "+------+------+------+------+------+------+------+------+\n"
 cell_left: .asciiz "| "
@@ -9,6 +10,7 @@ prompt_black: .asciiz "Den luot Den. Nhap o xuat phat (1-32, 0 de thoat): "
 prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, 0 de thoat): "
 dest_prompt: .asciiz "Nhap o den (1-32): "
 continue_prompt: .asciiz "Co the an tiep. Nhap o den tiep theo (1-32): "
+invalid_input: .asciiz "Dau vao khong phai so nguyen. Hay nhap lai.\n"
 invalid: .asciiz "O xuat phat khong hop le hoac khong phai quan cua ban. Hay thu lai.\n"
 invalid_move: .asciiz "Nuoc di khong hop le. Hay thu lai.\n"
 capture_message: .asciiz "Da an quan doi phuong.\n"
@@ -17,13 +19,181 @@ black_wins: .asciiz "Den thang!\n"
 red_wins: .asciiz "Do thang!\n"
 quit_message: .asciiz "Ket thuc van choi.\n"
 
+# Quy uoc thanh ghi dung xuyen suot chuong trinh chinh:
+#   $s0 = dia chi board        $s4 = luot hien tai (1 Den, -1 Do)
+#   $s1 = o xuat phat (0-63)   $s6 = 1 neu nuoc vua di la nuoc an
+#   $s2 = o den (0-63)         $s7 = 1 khi dang trong chuoi an bat buoc
+#   $s3 = gia tri quan dang di (1/-1 tot, 2/-2 vua)
 .text
 .globl main
 main:
     la    $s0, board
-    li    $t0, 0
+    jal   initialize_board
+    li    $s4, 1
+    move  $s7, $zero
 
+turn_start:
+    jal   display_board
+source_prompt:
+    bgtz  $s4, source_prompt_black
+    la    $a0, prompt_red
+    j     source_prompt_print
+source_prompt_black:
+    la    $a0, prompt_black
+source_prompt_print:
+    li    $v0, 4
+    syscall
+    jal   read_number
+    bltz  $v0, invalid_source_input
+    beq   $v0, $zero, game_exit
+    move  $a0, $v0
+    jal   square_to_index
+    bltz  $v0, invalid_source
+    move  $s1, $v0
+    addu  $t0, $s0, $s1
+    lb    $s3, 0($t0)
+    beq   $s3, $zero, invalid_source
+    slt   $t0, $zero, $s3
+    slt   $t1, $zero, $s4
+    bne   $t0, $t1, invalid_source
+
+destination_prompt:
+    bne   $s7, $zero, continue_destination_prompt
+    la    $a0, dest_prompt
+    j     print_destination_prompt
+continue_destination_prompt:
+    la    $a0, continue_prompt
+print_destination_prompt:
+    li    $v0, 4
+    syscall
+    jal   read_number
+    bltz  $v0, invalid_destination_input
+    move  $a0, $v0
+    jal   square_to_index
+    bltz  $v0, invalid_destination
+    move  $s2, $v0
+    move  $a0, $s1
+    move  $a1, $s2
+    move  $a2, $s3
+    jal   validate_move
+    beq   $v0, $zero, invalid_destination
+    addiu $s6, $v0, -1
+
+apply_move:
+    addu  $t0, $s0, $s1
+    sb    $zero, 0($t0)
+    addu  $t0, $s0, $s2
+    sb    $s3, 0($t0)
+    beq   $s6, $zero, check_promotion
+    addu  $t0, $s1, $s2
+    srl   $t0, $t0, 1
+    addu  $t0, $s0, $t0
+    sb    $zero, 0($t0)
+    la    $a0, capture_message
+    li    $v0, 4
+    syscall
+check_promotion:
+    srl   $t0, $s2, 3
+    li    $t1, 1
+    beq   $s3, $t1, promote_black
+    li    $t1, -1
+    beq   $s3, $t1, promote_red
+    j     check_next_capture
+promote_black:
+    bne   $t0, $zero, check_next_capture
+    li    $s3, 2
+    j     store_promoted_piece
+promote_red:
+    li    $t1, 7
+    bne   $t0, $t1, check_next_capture
+    li    $s3, -2
+store_promoted_piece:
+    addu  $t0, $s0, $s2
+    sb    $s3, 0($t0)
+    la    $a0, promotion_message
+    li    $v0, 4
+    syscall
+check_next_capture:
+    beq   $s6, $zero, finish_turn
+    move  $a0, $s2
+    move  $a1, $s3
+    li    $a2, 1
+    jal   piece_has_move
+    beq   $v0, $zero, finish_turn
+    li    $s7, 1
+    move  $s1, $s2
+    j     destination_prompt
+
+# Dem quan doi phuong con lai; neu het quan thi ben vua di thang, nguoc lai
+# doi luot.
+finish_turn:
+    move  $s7, $zero
+    move  $t0, $zero
+    move  $t1, $zero
+count_opponent_pieces:
+    addu  $t2, $s0, $t1
+    lb    $t3, 0($t2)
+    beq   $t3, $zero, count_next_square
+    slt   $t4, $zero, $t3
+    slt   $t5, $zero, $s4
+    beq   $t4, $t5, count_next_square
+    addiu $t0, $t0, 1
+count_next_square:
+    addiu $t1, $t1, 1
+    slti  $t2, $t1, 64
+    bne   $t2, $zero, count_opponent_pieces
+    beq   $t0, $zero, game_won
+    subu  $s4, $zero, $s4
+    j     turn_start
+game_won:
+    bgtz  $s4, black_wins_game
+    la    $a0, red_wins
+    j     print_winner
+black_wins_game:
+    la    $a0, black_wins
+print_winner:
+    li    $v0, 4
+    syscall
+    li    $v0, 10
+    syscall
+
+invalid_source_input:
+    la    $a0, invalid_input
+    j     report_source_error
+invalid_source:
+    la    $a0, invalid
+report_source_error:
+    li    $v0, 4
+    syscall
+    j     source_prompt
+
+# Nuoc di sai ngoai chuoi an ($s7 == 0): nhap lai ca o xuat phat va o den
+# (khop req.md), nen chon nham quan bi chan cung khong bi ket. Trong chuoi
+# an bat buoc ($s7 != 0) quan an phai giu nguyen, chi nhap lai o den.
+invalid_destination_input:
+    la    $a0, invalid_input
+    j     report_destination_error
+invalid_destination:
+    la    $a0, invalid_move
+report_destination_error:
+    li    $v0, 4
+    syscall
+    beq   $s7, $zero, source_prompt
+    j     destination_prompt
+
+game_exit:
+    la    $a0, quit_message
+    li    $v0, 4
+    syscall
+    li    $v0, 10
+    syscall
+
+# ---------------------------------------------------------------------------
+# initialize_board: dat Do o ba hang tren, Den o ba hang duoi, con lai trong.
+# ---------------------------------------------------------------------------
 initialize_board:
+    li    $t0, 0
+initialize_loop:
     srl   $t1, $t0, 3
     andi  $t2, $t0, 7
     addu  $t3, $t1, $t2
@@ -45,12 +215,13 @@ initialize_store:
     sb    $t3, 0($t4)
     addiu $t0, $t0, 1
     slti  $t3, $t0, 64
-    bne   $t3, $zero, initialize_board
+    bne   $t3, $zero, initialize_loop
+    jr    $ra
 
-    li    $s4, 1
-    move  $s7, $zero
-# Ban co in dang luoi; moi o toi hien ky hieu quan (r/b/R/B, '.' la o
-# trong) kem so o 1-32 de nguoi choi biet can nhap so nao.
+# ---------------------------------------------------------------------------
+# display_board: in ban co dang luoi; moi o toi hien ky hieu quan (r/b/R/B,
+# '.' la o trong) kem so o 1-32 de nguoi choi biet can nhap so nao.
+# ---------------------------------------------------------------------------
 display_board:
     la    $a0, newline
     li    $v0, 4
@@ -127,267 +298,201 @@ next_column:
     addiu $t0, $t0, 1
     slti  $t2, $t0, 8
     bne   $t2, $zero, print_row
-source_prompt:
-    bgtz  $s4, source_prompt_black
-    la    $a0, prompt_red
-    j     source_prompt_print
-source_prompt_black:
-    la    $a0, prompt_black
-source_prompt_print:
-    li    $v0, 4
-    syscall
-source_input:
-    li    $v0, 5
-    syscall
-    move  $t0, $v0
-    beq   $t0, $zero, game_exit
-    blt   $t0, 1, invalid_source
-    bgt   $t0, 32, invalid_source
-    addiu $t0, $t0, -1
-    srl   $t1, $t0, 2
-    andi  $t2, $t0, 3
-    sll   $t2, $t2, 1
-    andi  $t3, $t1, 1
-    bne   $t3, $zero, source_column_ready
-    addiu $t2, $t2, 1
-source_column_ready:
-    sll   $s1, $t1, 3
-    addu  $s1, $s1, $t2
-    addu  $t4, $s0, $s1
-    lb    $t3, 0($t4)
-    beq   $t3, $zero, invalid_source
-    slt   $t5, $zero, $t3
-    slt   $t6, $zero, $s4
-    bne   $t5, $t6, invalid_source
-    move  $s3, $t3
-destination_prompt:
-    bne   $s7, $zero, continue_destination_prompt
-    la    $a0, dest_prompt
-    j     print_destination_prompt
-continue_destination_prompt:
-    la    $a0, continue_prompt
-print_destination_prompt:
-    li    $v0, 4
-    syscall
-destination_input:
-    li    $v0, 5
-    syscall
-    move  $t0, $v0
-    blt   $t0, 1, invalid_destination
-    bgt   $t0, 32, invalid_destination
-    addiu $t0, $t0, -1
-    srl   $t1, $t0, 2
-    andi  $t2, $t0, 3
-    sll   $t2, $t2, 1
-    andi  $t3, $t1, 1
-    bne   $t3, $zero, destination_column_ready
-    addiu $t2, $t2, 1
-destination_column_ready:
-    sll   $s2, $t1, 3
-    addu  $s2, $s2, $t2
-    addu  $t4, $s0, $s2
-    lb    $t5, 0($t4)
-    bne   $t5, $zero, invalid_destination
+    jr    $ra
 
-    move  $s6, $zero
-    srl   $t0, $s1, 3
-    srl   $t1, $s2, 3
+# ---------------------------------------------------------------------------
+# read_number: doc mot dong bang syscall 8 (khong dung syscall 5 vi MARS dung
+# chuong trinh khi gap ky tu khong phai so). Chap nhan khoang trang hai dau
+# va toi da 3 chu so.
+# Tra ve: $v0 = so doc duoc (>= 0), hoac -1 neu dong trong / sai dinh dang.
+# ---------------------------------------------------------------------------
+read_number:
+    la    $a0, input_buffer
+    li    $a1, 16
+    li    $v0, 8
+    syscall
+    la    $t0, input_buffer
+    move  $v0, $zero
+    move  $t1, $zero
+read_skip_leading:
+    lb    $t2, 0($t0)
+    li    $t3, 32
+    bne   $t2, $t3, read_digits
+    addiu $t0, $t0, 1
+    j     read_skip_leading
+read_digits:
+    lb    $t2, 0($t0)
+    slti  $t3, $t2, 48
+    bne   $t3, $zero, read_trailing
+    slti  $t3, $t2, 58
+    beq   $t3, $zero, read_trailing
+    li    $t3, 10
+    mul   $v0, $v0, $t3
+    addiu $t2, $t2, -48
+    addu  $v0, $v0, $t2
+    addiu $t1, $t1, 1
+    slti  $t3, $t1, 4
+    beq   $t3, $zero, read_invalid
+    addiu $t0, $t0, 1
+    j     read_digits
+read_trailing:
+    lb    $t2, 0($t0)
+    beq   $t2, $zero, read_end
+    li    $t3, 10
+    beq   $t2, $t3, read_end
+    li    $t3, 13
+    beq   $t2, $t3, read_skip_trailing
+    li    $t3, 32
+    bne   $t2, $t3, read_invalid
+read_skip_trailing:
+    addiu $t0, $t0, 1
+    j     read_trailing
+read_end:
+    beq   $t1, $zero, read_invalid
+    jr    $ra
+read_invalid:
+    li    $v0, -1
+    jr    $ra
+
+# ---------------------------------------------------------------------------
+# square_to_index: doi so o 1-32 sang chi so 0-63 trong board.
+# Moi hang co 4 o toi; hang chan (0, 2, ...) bat dau o cot 1, hang le o cot 0.
+# Vao: $a0 = so o. Tra ve: $v0 = chi so, hoac -1 neu ngoai khoang 1-32.
+# ---------------------------------------------------------------------------
+square_to_index:
+    blt   $a0, 1, square_invalid
+    bgt   $a0, 32, square_invalid
+    addiu $t0, $a0, -1
+    srl   $t1, $t0, 2
+    andi  $t2, $t0, 3
+    sll   $t2, $t2, 1
+    andi  $t3, $t1, 1
+    bne   $t3, $zero, square_column_ready
+    addiu $t2, $t2, 1
+square_column_ready:
+    sll   $v0, $t1, 3
+    addu  $v0, $v0, $t2
+    jr    $ra
+square_invalid:
+    li    $v0, -1
+    jr    $ra
+
+# ---------------------------------------------------------------------------
+# validate_move: kiem tra quan $a2 di tu o $a0 den o $a1 (chi so 0-63).
+# - O den phai trong, di cheo dung 1 hoac 2 hang.
+# - Tot chi di tien (Den len tren, Do xuong duoi); vua di ca hai huong.
+# - Di 2 hang la nuoc an: o giua phai co quan doi phuong.
+# - Trong chuoi an ($s7 != 0) chi chap nhan nuoc an.
+# Tra ve: $v0 = 0 khong hop le, 1 nuoc di thuong, 2 nuoc an.
+# ---------------------------------------------------------------------------
+validate_move:
+    addu  $t0, $s0, $a1
+    lb    $t0, 0($t0)
+    bne   $t0, $zero, validate_invalid
+    srl   $t0, $a0, 3
+    srl   $t1, $a1, 3
     subu  $t2, $t1, $t0
     li    $t3, 2
-    beq   $s3, $t3, measure_row_distance
+    beq   $a2, $t3, validate_distance
     li    $t3, -2
-    beq   $s3, $t3, measure_row_distance
-    bgtz  $s4, validate_black_direction
-    blez  $t2, invalid_destination
-    j     measure_row_distance
+    beq   $a2, $t3, validate_distance
+    bgtz  $a2, validate_black_direction
+    blez  $t2, validate_invalid
+    j     validate_distance
 validate_black_direction:
-    bgez  $t2, invalid_destination
-measure_row_distance:
-    bltz  $t2, absolute_row_distance
-    j     row_distance_ready
-absolute_row_distance:
-    subu  $t2, $zero, $t2
-row_distance_ready:
-    move  $t6, $t2
+    bgez  $t2, validate_invalid
+validate_distance:
+    abs   $t4, $t2
+    andi  $t0, $a0, 7
+    andi  $t1, $a1, 7
+    subu  $t5, $t1, $t0
+    abs   $t5, $t5
+    bne   $t4, $t5, validate_invalid
     li    $t3, 1
-    beq   $t2, $t3, validate_normal_distance
+    beq   $t4, $t3, validate_step
     li    $t3, 2
-    bne   $t2, $t3, invalid_destination
-    li    $s6, 1
-    j     validate_column
-validate_normal_distance:
-    bne   $s7, $zero, invalid_destination
-validate_column:
-    andi  $t0, $s1, 7
-    andi  $t1, $s2, 7
-    subu  $t2, $t1, $t0
-    bltz  $t2, absolute_column_distance
-    j     column_distance_ready
-absolute_column_distance:
-    subu  $t2, $zero, $t2
-column_distance_ready:
-    bne   $t2, $t6, invalid_destination
-    beq   $s6, $zero, apply_move
-    addu  $t0, $s1, $s2
-    srl   $t0, $t0, 1
-    addu  $t1, $s0, $t0
-    lb    $t2, 0($t1)
-    beq   $t2, $zero, invalid_destination
-    slt   $t3, $zero, $t2
-    slt   $t4, $zero, $s4
-    beq   $t3, $t4, invalid_destination
-apply_move:
-    addu  $t0, $s0, $s1
-    sb    $zero, 0($t0)
-    addu  $t0, $s0, $s2
-    sb    $s3, 0($t0)
-    beq   $s6, $zero, check_promotion
-    addu  $t0, $s1, $s2
+    bne   $t4, $t3, validate_invalid
+    addu  $t0, $a0, $a1
     srl   $t0, $t0, 1
     addu  $t0, $s0, $t0
-    sb    $zero, 0($t0)
-    la    $a0, capture_message
-    li    $v0, 4
-    syscall
-check_promotion:
-    srl   $t0, $s2, 3
-    li    $t1, 1
-    beq   $s3, $t1, promote_black
-    li    $t1, -1
-    beq   $s3, $t1, promote_red
-    j     check_next_capture
-promote_black:
-    bne   $t0, $zero, check_next_capture
-    li    $s3, 2
-    j     store_promoted_piece
-promote_red:
-    li    $t1, 7
-    bne   $t0, $t1, check_next_capture
-    li    $s3, -2
-store_promoted_piece:
-    addu  $t0, $s0, $s2
-    sb    $s3, 0($t0)
-    la    $a0, promotion_message
-    li    $v0, 4
-    syscall
-check_next_capture:
-    beq   $s6, $zero, finish_move
-    move  $a0, $s2
-    move  $a1, $s3
-    jal   has_capture
-    beq   $v0, $zero, finish_turn
-    li    $s7, 1
-    move  $s1, $s2
-    j     destination_prompt
-finish_move:
-finish_turn:
-    move  $s7, $zero
-    li    $t0, 0
-    li    $t1, 0
-count_opponent_pieces:
-    addu  $t2, $s0, $t1
-    lb    $t3, 0($t2)
-    beq   $t3, $zero, count_next_square
-    slt   $t4, $zero, $t3
-    slt   $t5, $zero, $s4
-    beq   $t4, $t5, count_next_square
-    addiu $t0, $t0, 1
-count_next_square:
-    addiu $t1, $t1, 1
-    slti  $t2, $t1, 64
-    bne   $t2, $zero, count_opponent_pieces
-    bne   $t0, $zero, switch_turn
-    bgtz  $s4, black_wins_game
-    la    $a0, red_wins
-    j     print_winner
-black_wins_game:
-    la    $a0, black_wins
-print_winner:
-    li    $v0, 4
-    syscall
-    li    $v0, 10
-    syscall
-switch_turn:
-    subu  $s4, $zero, $s4
-    j     display_board
-
-# Nuoc di sai ngoai chuoi an ($s7 == 0): nhap lai ca o xuat phat va o den
-# (khop req.md), nen chon nham quan bi chan cung khong bi ket. Trong chuoi
-# an bat buoc ($s7 != 0) quan an phai giu nguyen, chi nhap lai o den.
-invalid_destination:
-    la    $a0, invalid_move
-    li    $v0, 4
-    syscall
-    beq   $s7, $zero, source_prompt
-    j     destination_prompt
-
-game_exit:
-    la    $a0, quit_message
-    li    $v0, 4
-    syscall
-    li    $v0, 10
-    syscall
-
-invalid_source:
-    la    $a0, invalid
-    li    $v0, 4
-    syscall
-    j     source_prompt
-
-has_capture:
-    srl   $t0, $a0, 3
-    andi  $t1, $a0, 7
-    move  $t8, $zero
-    bgtz  $s4, capture_black_direction
-    li    $t2, 1
-    j     capture_direction_ready
-capture_black_direction:
-    li    $t2, -1
-capture_direction_ready:
-    li    $t3, -1
-capture_dx_loop:
-    sll   $t4, $t2, 1
-    addu  $t5, $t0, $t4
-    bltz  $t5, capture_next_dx
-    slti  $t6, $t5, 8
-    beq   $t6, $zero, capture_next_dx
-    sll   $t4, $t3, 1
-    addu  $t6, $t1, $t4
-    bltz  $t6, capture_next_dx
-    slti  $t7, $t6, 8
-    beq   $t7, $zero, capture_next_dx
-    sll   $t4, $t5, 3
-    addu  $t4, $t4, $t6
-    addu  $t4, $s0, $t4
-    lb    $t4, 0($t4)
-    bne   $t4, $zero, capture_next_dx
-    addu  $t5, $t0, $t2
-    addu  $t6, $t1, $t3
-    sll   $t5, $t5, 3
-    addu  $t5, $t5, $t6
-    addu  $t5, $s0, $t5
-    lb    $t5, 0($t5)
-    beq   $t5, $zero, capture_next_dx
-    slt   $t6, $zero, $t5
-    slt   $t7, $zero, $s4
-    bne   $t6, $t7, capture_found
-capture_next_dx:
-    addiu $t3, $t3, 2
-    slti  $t4, $t3, 2
-    bne   $t4, $zero, capture_dx_loop
-    bne   $t8, $zero, capture_not_found
-    li    $t4, 2
-    beq   $a1, $t4, capture_reverse_direction
-    li    $t4, -2
-    bne   $a1, $t4, capture_not_found
-capture_reverse_direction:
-    li    $t8, 1
-    subu  $t2, $zero, $t2
-    li    $t3, -1
-    j     capture_dx_loop
-capture_not_found:
+    lb    $t0, 0($t0)
+    beq   $t0, $zero, validate_invalid
+    slt   $t1, $zero, $t0
+    slt   $t3, $zero, $a2
+    beq   $t1, $t3, validate_invalid
+    li    $v0, 2
+    jr    $ra
+validate_step:
+    bne   $s7, $zero, validate_invalid
+    li    $v0, 1
+    jr    $ra
+validate_invalid:
     move  $v0, $zero
     jr    $ra
-capture_found:
+
+# ---------------------------------------------------------------------------
+# piece_has_move: thu 8 o dich quanh quan $a1 o o $a0 (4 huong cheo x khoang
+# cach 1 hoac 2) bang validate_move.
+# Vao: $a2 = 1 neu chi tinh nuoc an. Tra ve: $v0 = 1 neu co nuoc, 0 neu khong.
+# Bit cua bien dem k (0-7): bit 0 = khoang cach 1/2, bit 1 = len/xuong,
+# bit 2 = trai/phai.
+# ---------------------------------------------------------------------------
+piece_has_move:
+    addiu $sp, $sp, -20
+    sw    $ra, 16($sp)
+    sw    $s1, 12($sp)
+    sw    $s2, 8($sp)
+    sw    $s3, 4($sp)
+    sw    $s5, 0($sp)
+    move  $s1, $a0
+    move  $s2, $a1
+    move  $s3, $a2
+    move  $s5, $zero
+piece_move_loop:
+    andi  $t0, $s5, 1
+    addiu $t0, $t0, 1
+    andi  $t1, $s5, 2
+    move  $t2, $t0
+    bne   $t1, $zero, piece_row_step_ready
+    subu  $t2, $zero, $t0
+piece_row_step_ready:
+    andi  $t1, $s5, 4
+    move  $t3, $t0
+    bne   $t1, $zero, piece_column_step_ready
+    subu  $t3, $zero, $t0
+piece_column_step_ready:
+    srl   $t4, $s1, 3
+    addu  $t4, $t4, $t2
+    bltz  $t4, piece_next_target
+    slti  $t5, $t4, 8
+    beq   $t5, $zero, piece_next_target
+    andi  $t5, $s1, 7
+    addu  $t5, $t5, $t3
+    bltz  $t5, piece_next_target
+    slti  $t6, $t5, 8
+    beq   $t6, $zero, piece_next_target
+    sll   $a1, $t4, 3
+    addu  $a1, $a1, $t5
+    move  $a0, $s1
+    move  $a2, $s2
+    jal   validate_move
+    beq   $v0, $zero, piece_next_target
+    beq   $s3, $zero, piece_move_found
+    li    $t0, 2
+    beq   $v0, $t0, piece_move_found
+piece_next_target:
+    addiu $s5, $s5, 1
+    slti  $t0, $s5, 8
+    bne   $t0, $zero, piece_move_loop
+    move  $v0, $zero
+    j     piece_move_return
+piece_move_found:
     li    $v0, 1
+piece_move_return:
+    lw    $s5, 0($sp)
+    lw    $s3, 4($sp)
+    lw    $s2, 8($sp)
+    lw    $s1, 12($sp)
+    lw    $ra, 16($sp)
+    addiu $sp, $sp, 20
     jr    $ra
