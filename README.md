@@ -10,7 +10,7 @@ Mở MARS và nạp `checkers.asm`, hoặc chạy MARS từ PowerShell:
 java -jar "C:\Users\ADMIN\Downloads\Mars4_5.jar" checkers.asm
 ```
 
-Đen đi trước. Mỗi lượt nhập số ô xuất phát rồi số ô đến. Khi chương trình yêu cầu ăn tiếp, chỉ nhập ô đến tiếp theo; quân vừa ăn sẽ tiếp tục di chuyển. Nhập `0` tại lời nhắc ô xuất phát để thoát. Nếu nước đi không hợp lệ, chương trình yêu cầu nhập lại cả ô xuất phát và ô đến (trong chuỗi ăn bắt buộc chỉ nhập lại ô đến).
+Đen đi trước. Mỗi lượt nhập số ô của quân muốn đi; chương trình liệt kê các nước đi hợp lệ của quân đó (ví dụ `1) 22-17`, `2) 22-18`, dấu `x` là nước ăn) và người chơi nhập số thứ tự nước muốn đi. Khi có thể ăn tiếp, chương trình liệt kê các nước ăn tiếp của quân vừa ăn để chọn tiếp. Nhập `0` tại lời nhắc ô xuất phát để thoát. Nếu lựa chọn không hợp lệ, chương trình yêu cầu chọn lại từ ô xuất phát (trong chuỗi ăn bắt buộc chỉ chọn lại nước ăn).
 
 ## Chạy testcase
 
@@ -49,14 +49,16 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 | `initialize_board` | Đặt quân Đỏ ở ba hàng trên, quân Đen ở ba hàng dưới. |
 | `display_board` | In trạng thái bàn cờ. |
 | `read_number` | Đọc một dòng bằng `syscall 8` rồi tự chuyển sang số; trả về `-1` nếu dòng trống hoặc không phải số. |
-| `square_to_index` | Đổi số ô 1–32 sang chỉ số 0–63 trong `board`. |
+| `square_to_index` | Đổi số ô 1–32 (theo góc nhìn bên đang đi) sang chỉ số 0–63 trong `board`. |
+| `index_to_square` | Đổi ngược chỉ số 0–63 sang số ô 1–32 để in ra. |
 | `validate_move` | Kiểm tra ô đến trống, đúng hướng, đúng đường chéo; trả về 0 (sai), 1 (đi thường) hoặc 2 (ăn quân). |
-| `piece_has_move` | Thử 8 ô đích quanh một quân bằng `validate_move`; dùng để tìm nước ăn tiếp. |
+| `build_move_list` | Thử mọi ô đích 1–32 bằng `validate_move`, ghi các nước hợp lệ của một quân vào `move_list`. |
+| `print_move_list` | In danh sách nước đi đã đánh số để người chơi chọn. |
 | `has_any_move` | Kiểm tra bên đang đến lượt còn nước đi hợp lệ hay không. |
 
-1. `source_prompt` và `destination_prompt` nhận lượt đi qua `read_number` và `square_to_index`, sau đó gọi `validate_move`.
+1. `source_prompt` nhận ô xuất phát; `move_menu` gọi `build_move_list` và `print_move_list`, rồi đọc số thứ tự nước đi.
 2. `apply_move` cập nhật quân; nếu ăn thì xóa quân đối phương ở ô giữa. Nếu tốt đến hàng cuối, chương trình phong vua.
-3. Sau nước ăn, `piece_has_move` tìm nước ăn tiếp cho cùng quân; nếu có thì bắt buộc ăn tiếp.
+3. Sau nước ăn, `build_move_list` (chỉ tính nước ăn khi `$s7 = 1`) tìm nước ăn tiếp cho cùng quân; nếu có thì quay lại `move_menu` và bắt buộc ăn tiếp.
 4. `finish_turn` đổi lượt rồi gọi `has_any_move`. Nếu bên sắp đi hết quân hoặc mọi quân đều bị chặn, bên vừa đi thắng.
 
 ## Phạm vi
@@ -77,3 +79,8 @@ Chương trình chính (`main`) điều phối lượt đi; các bước tính t
 
 - **Lý do:** Khi bàn cờ đã xoay, nếu số ô vẫn theo góc nhìn Đen thì Đỏ thấy số chạy ngược (32 ở góc trên bên trái), rất dễ nhập nhầm. Với cách đánh số theo người chơi, ô dưới cùng bên trái của cả hai bên đều là ô 29 và quân mình luôn nằm ở các ô 21–32 khi bắt đầu ván.
 - **Cách làm:** Xoay 180 độ biến ô số `n` thành ô số `33 - n`. Vì vậy `square_to_index` đổi `n` thành `33 - n` trước khi tính tọa độ khi `$s4 < 0`, còn `display_board` in số `33 - n` cho từng ô. Phần còn lại của chương trình vẫn làm việc với chỉ số 0–63 trong `board`.
+
+### Chọn nước đi từ danh sách
+
+- **Lý do:** Gõ ô đến dễ sai (nhầm hướng, nhầm ô có quân, quên luật ăn). Khi chương trình tự liệt kê các nước hợp lệ, người chơi chỉ cần chọn, không thể nhập một nước sai luật. Chọn nhầm một quân bị chặn cũng được báo ngay thay vì phải đoán ô đến. Trong chuỗi ăn, danh sách chỉ gồm các nước ăn tiếp nên người chơi thấy rõ mình bắt buộc phải đi đâu.
+- **Cách làm:** `build_move_list` thử lần lượt ô đích 1–32 (theo góc nhìn bên đang đi) bằng `validate_move` và lưu các ô hợp lệ vào mảng `move_list`. Vì thử theo số ô tăng dần nên danh sách đã được sắp xếp sẵn. `print_move_list` in từng nước theo ký hiệu cờ đam (`-` đi thường, `x` ăn quân). Lựa chọn `k` lấy ô đích từ `move_list[k - 1]`; nước ăn được nhận ra khi hàng đích cách hàng xuất phát 2 hàng. Cùng hàm này cũng dùng để kiểm tra còn nước ăn tiếp (`$s7 = 1` khiến `validate_move` chỉ nhận nước ăn) và kiểm tra bên sắp đi còn nước hay không.

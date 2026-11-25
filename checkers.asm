@@ -1,6 +1,7 @@
 .data
 board:   .space 64
 input_buffer: .space 16
+move_list: .space 8
 newline: .asciiz "\n"
 header_black: .asciiz "Ban co theo goc nhin ben Den:\n"
 header_red: .asciiz "Ban co theo goc nhin ben Do:\n"
@@ -10,11 +11,17 @@ light_cell: .asciiz "     "
 row_end: .asciiz "|\n"
 prompt_black: .asciiz "Den luot Den. Nhap o xuat phat (1-32, 0 de thoat): "
 prompt_red: .asciiz "Den luot Do. Nhap o xuat phat (1-32, 0 de thoat): "
-dest_prompt: .asciiz "Nhap o den (1-32): "
-continue_prompt: .asciiz "Co the an tiep. Nhap o den tiep theo (1-32): "
+moves_header: .asciiz "Cac nuoc di cua quan o "
+moves_header_end: .asciiz ":\n"
+move_item_indent: .asciiz "  "
+move_item_separator: .asciiz ") "
+choice_prompt: .asciiz "Chon nuoc di (1-"
+choice_prompt_end: .asciiz "): "
+continue_message: .asciiz "Co the an tiep.\n"
 invalid_input: .asciiz "Dau vao khong phai so nguyen. Hay nhap lai.\n"
 invalid: .asciiz "O xuat phat khong hop le hoac khong phai quan cua ban. Hay thu lai.\n"
-invalid_move: .asciiz "Nuoc di khong hop le. Hay thu lai.\n"
+no_moves_for_piece: .asciiz "Quan nay khong co nuoc di hop le. Hay chon quan khac.\n"
+invalid_choice: .asciiz "Lua chon khong hop le. Hay thu lai.\n"
 capture_message: .asciiz "Da an quan doi phuong.\n"
 promotion_message: .asciiz "Quan tot duoc phong vua.\n"
 no_move_message: .asciiz "Doi phuong khong con nuoc di hop le.\n"
@@ -27,6 +34,7 @@ quit_message: .asciiz "Ket thuc van choi.\n"
 #   $s1 = o xuat phat (0-63)   $s6 = 1 neu nuoc vua di la nuoc an
 #   $s2 = o den (0-63)         $s7 = 1 khi dang trong chuoi an bat buoc
 #   $s3 = gia tri quan dang di (1/-1 tot, 2/-2 vua)
+#   $s5 = so nuoc di trong move_list cua quan dang chon
 .text
 .globl main
 main:
@@ -60,27 +68,42 @@ source_prompt_print:
     slt   $t1, $zero, $s4
     bne   $t0, $t1, invalid_source
 
-destination_prompt:
-    bne   $s7, $zero, continue_destination_prompt
-    la    $a0, dest_prompt
-    j     print_destination_prompt
-continue_destination_prompt:
-    la    $a0, continue_prompt
-print_destination_prompt:
+# Liet ke moi nuoc di hop le cua quan o $s1 roi cho nguoi choi chon theo so
+# thu tu. Trong chuoi an ($s7 != 0) danh sach chi gom nuoc an tiep.
+move_menu:
+    move  $a0, $s1
+    move  $a1, $s3
+    jal   build_move_list
+    beq   $v0, $zero, piece_has_no_moves
+    move  $s5, $v0
+    beq   $s7, $zero, print_move_menu
+    la    $a0, continue_message
+    li    $v0, 4
+    syscall
+print_move_menu:
+    move  $a0, $s1
+    move  $a1, $s5
+    jal   print_move_list
+    la    $a0, choice_prompt
+    li    $v0, 4
+    syscall
+    move  $a0, $s5
+    li    $v0, 1
+    syscall
+    la    $a0, choice_prompt_end
     li    $v0, 4
     syscall
     jal   read_number
-    bltz  $v0, invalid_destination_input
-    move  $a0, $v0
-    jal   square_to_index
-    bltz  $v0, invalid_destination
-    move  $s2, $v0
-    move  $a0, $s1
-    move  $a1, $s2
-    move  $a2, $s3
-    jal   validate_move
-    beq   $v0, $zero, invalid_destination
-    addiu $s6, $v0, -1
+    blt   $v0, 1, invalid_choice_entry
+    bgt   $v0, $s5, invalid_choice_entry
+    la    $t0, move_list
+    addu  $t0, $t0, $v0
+    lbu   $s2, -1($t0)
+    srl   $t0, $s1, 3
+    srl   $t1, $s2, 3
+    subu  $t0, $t1, $t0
+    abs   $t0, $t0
+    srl   $s6, $t0, 1
 
 apply_move:
     addu  $t0, $s0, $s1
@@ -116,16 +139,17 @@ store_promoted_piece:
     la    $a0, promotion_message
     li    $v0, 4
     syscall
+# Sau nuoc an, bat $s7 de build_move_list chi tinh nuoc an; neu quan vua
+# an con nuoc an thi bat buoc an tiep, nguoc lai ket thuc luot.
 check_next_capture:
     beq   $s6, $zero, finish_turn
+    li    $s7, 1
     move  $a0, $s2
     move  $a1, $s3
-    li    $a2, 1
-    jal   piece_has_move
+    jal   build_move_list
     beq   $v0, $zero, finish_turn
-    li    $s7, 1
     move  $s1, $s2
-    j     destination_prompt
+    j     move_menu
 
 # Doi luot roi kiem tra ben sap di con nuoc hop le khong. Het quan cung la
 # truong hop khong con nuoc di, nen mot phep kiem tra bao ca hai dieu kien.
@@ -152,6 +176,9 @@ print_winner:
 invalid_source_input:
     la    $a0, invalid_input
     j     report_source_error
+piece_has_no_moves:
+    la    $a0, no_moves_for_piece
+    j     report_source_error
 invalid_source:
     la    $a0, invalid
 report_source_error:
@@ -159,19 +186,15 @@ report_source_error:
     syscall
     j     source_prompt
 
-# Nuoc di sai ngoai chuoi an ($s7 == 0): nhap lai ca o xuat phat va o den
-# (khop req.md), nen chon nham quan bi chan cung khong bi ket. Trong chuoi
-# an bat buoc ($s7 != 0) quan an phai giu nguyen, chi nhap lai o den.
-invalid_destination_input:
-    la    $a0, invalid_input
-    j     report_destination_error
-invalid_destination:
-    la    $a0, invalid_move
-report_destination_error:
+# Lua chon sai ngoai chuoi an ($s7 == 0): chon lai tu o xuat phat (khop
+# req.md). Trong chuoi an bat buoc ($s7 != 0) quan an phai giu nguyen, chi
+# in lai danh sach nuoc an.
+invalid_choice_entry:
+    la    $a0, invalid_choice
     li    $v0, 4
     syscall
     beq   $s7, $zero, source_prompt
-    j     destination_prompt
+    j     move_menu
 
 game_exit:
     la    $a0, quit_message
@@ -450,13 +473,30 @@ validate_invalid:
     jr    $ra
 
 # ---------------------------------------------------------------------------
-# piece_has_move: thu 8 o dich quanh quan $a1 o o $a0 (4 huong cheo x khoang
-# cach 1 hoac 2) bang validate_move.
-# Vao: $a2 = 1 neu chi tinh nuoc an. Tra ve: $v0 = 1 neu co nuoc, 0 neu khong.
-# Bit cua bien dem k (0-7): bit 0 = khoang cach 1/2, bit 1 = len/xuong,
-# bit 2 = trai/phai.
+# index_to_square: doi chi so 0-63 sang so o 1-32 theo goc nhin ben dang di
+# (nguoc voi square_to_index). Chi dung $t0, $t1 va $v0.
 # ---------------------------------------------------------------------------
-piece_has_move:
+index_to_square:
+    srl   $t0, $a0, 3
+    sll   $t0, $t0, 2
+    andi  $t1, $a0, 7
+    srl   $t1, $t1, 1
+    addu  $v0, $t0, $t1
+    addiu $v0, $v0, 1
+    bgtz  $s4, index_to_square_done
+    li    $t0, 33
+    subu  $v0, $t0, $v0
+index_to_square_done:
+    jr    $ra
+
+# ---------------------------------------------------------------------------
+# build_move_list: tim moi nuoc di hop le cua quan $a1 dang o o $a0.
+# Thu lan luot o dich so 1-32 (theo goc nhin ben dang di) bang validate_move,
+# nen danh sach tu dong sap xep theo so o tang dan. Trong chuoi an
+# ($s7 != 0) validate_move chi chap nhan nuoc an.
+# Ket qua: chi so cac o dich ghi vao move_list; $v0 = so nuoc tim duoc.
+# ---------------------------------------------------------------------------
+build_move_list:
     addiu $sp, $sp, -20
     sw    $ra, 16($sp)
     sw    $s1, 12($sp)
@@ -465,55 +505,105 @@ piece_has_move:
     sw    $s5, 0($sp)
     move  $s1, $a0
     move  $s2, $a1
-    move  $s3, $a2
+    li    $s3, 1
     move  $s5, $zero
-piece_move_loop:
-    andi  $t0, $s5, 1
-    addiu $t0, $t0, 1
-    andi  $t1, $s5, 2
-    move  $t2, $t0
-    bne   $t1, $zero, piece_row_step_ready
-    subu  $t2, $zero, $t0
-piece_row_step_ready:
-    andi  $t1, $s5, 4
-    move  $t3, $t0
-    bne   $t1, $zero, piece_column_step_ready
-    subu  $t3, $zero, $t0
-piece_column_step_ready:
-    srl   $t4, $s1, 3
-    addu  $t4, $t4, $t2
-    bltz  $t4, piece_next_target
-    slti  $t5, $t4, 8
-    beq   $t5, $zero, piece_next_target
-    andi  $t5, $s1, 7
-    addu  $t5, $t5, $t3
-    bltz  $t5, piece_next_target
-    slti  $t6, $t5, 8
-    beq   $t6, $zero, piece_next_target
-    sll   $a1, $t4, 3
-    addu  $a1, $a1, $t5
+build_move_loop:
+    move  $a0, $s3
+    jal   square_to_index
     move  $a0, $s1
+    move  $a1, $v0
     move  $a2, $s2
     jal   validate_move
-    beq   $v0, $zero, piece_next_target
-    beq   $s3, $zero, piece_move_found
-    li    $t0, 2
-    beq   $v0, $t0, piece_move_found
-piece_next_target:
+    beq   $v0, $zero, build_move_next
+    la    $t0, move_list
+    addu  $t0, $t0, $s5
+    sb    $a1, 0($t0)
     addiu $s5, $s5, 1
-    slti  $t0, $s5, 8
-    bne   $t0, $zero, piece_move_loop
-    move  $v0, $zero
-    j     piece_move_return
-piece_move_found:
-    li    $v0, 1
-piece_move_return:
+build_move_next:
+    addiu $s3, $s3, 1
+    slti  $t0, $s3, 33
+    bne   $t0, $zero, build_move_loop
+    move  $v0, $s5
     lw    $s5, 0($sp)
     lw    $s3, 4($sp)
     lw    $s2, 8($sp)
     lw    $s1, 12($sp)
     lw    $ra, 16($sp)
     addiu $sp, $sp, 20
+    jr    $ra
+
+# ---------------------------------------------------------------------------
+# print_move_list: in $a1 nuoc trong move_list cua quan o o $a0, dang
+#   Cac nuoc di cua quan o 21:
+#     1) 21-17
+# Dung '-' cho nuoc di thuong va 'x' cho nuoc an (ky hieu co dam chuan).
+# ---------------------------------------------------------------------------
+print_move_list:
+    addiu $sp, $sp, -16
+    sw    $ra, 12($sp)
+    sw    $s1, 8($sp)
+    sw    $s2, 4($sp)
+    sw    $s3, 0($sp)
+    move  $s1, $a0
+    move  $s2, $a1
+    move  $s3, $zero
+    la    $a0, moves_header
+    li    $v0, 4
+    syscall
+    move  $a0, $s1
+    jal   index_to_square
+    move  $a0, $v0
+    li    $v0, 1
+    syscall
+    la    $a0, moves_header_end
+    li    $v0, 4
+    syscall
+print_move_loop:
+    la    $a0, move_item_indent
+    li    $v0, 4
+    syscall
+    addiu $a0, $s3, 1
+    li    $v0, 1
+    syscall
+    la    $a0, move_item_separator
+    li    $v0, 4
+    syscall
+    move  $a0, $s1
+    jal   index_to_square
+    move  $a0, $v0
+    li    $v0, 1
+    syscall
+    la    $t0, move_list
+    addu  $t0, $t0, $s3
+    lbu   $t1, 0($t0)
+    srl   $t2, $s1, 3
+    srl   $t3, $t1, 3
+    subu  $t2, $t3, $t2
+    abs   $t2, $t2
+    li    $a0, 45
+    li    $t3, 2
+    bne   $t2, $t3, print_move_separator
+    li    $a0, 120
+print_move_separator:
+    li    $v0, 11
+    syscall
+    la    $t0, move_list
+    addu  $t0, $t0, $s3
+    lbu   $a0, 0($t0)
+    jal   index_to_square
+    move  $a0, $v0
+    li    $v0, 1
+    syscall
+    la    $a0, newline
+    li    $v0, 4
+    syscall
+    addiu $s3, $s3, 1
+    bne   $s3, $s2, print_move_loop
+    lw    $s3, 0($sp)
+    lw    $s2, 4($sp)
+    lw    $s1, 8($sp)
+    lw    $ra, 12($sp)
+    addiu $sp, $sp, 16
     jr    $ra
 
 # ---------------------------------------------------------------------------
@@ -533,9 +623,10 @@ any_move_loop:
     slt   $t2, $zero, $s4
     bne   $t1, $t2, any_move_next
     move  $a0, $s1
-    move  $a2, $zero
-    jal   piece_has_move
-    bne   $v0, $zero, any_move_return
+    jal   build_move_list
+    beq   $v0, $zero, any_move_next
+    li    $v0, 1
+    j     any_move_return
 any_move_next:
     addiu $s1, $s1, 1
     slti  $t0, $s1, 64
